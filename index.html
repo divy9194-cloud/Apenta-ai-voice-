@@ -1,0 +1,93 @@
+Here is the professional landing page and documentation in index.html for **Penta AI Voice Assistant**, developed by Divyanshu Kumar. It showcases the features, architecture, and project overview in a modern, responsive single-page web format with dark mode styling matching the app's neon aesthetic.
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Penta AI Voice Assistant | Developed by Divyanshu Kumar</title>
+    <style>
+        :root {
+            --bg-dark: #0f172a;
+            --panel-bg: #151a2e;
+            --neon-cyan: #22d3ee;
+            --neon-violet: #8b5cf6;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+        body { background-color: var(--bg-dark); color: var(--text-main); line-height: 1.6; padding: 2rem 1rem; }
+        .container { max-width: 900px; margin: 0 auto; }
+        header { text-align: center; padding: 3rem 0; border-bottom: 1px solid rgba(255,255,255,0.1); }
+        h1 { font-size: 2.5rem; background: linear-gradient(135deg, var(--neon-cyan), var(--neon-violet)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 0.5rem; }
+        .subtitle { color: var(--text-muted); font-size: 1.1rem; }
+        .developer { margin-top: 1rem; display: inline-block; padding: 0.4rem 1rem; background: rgba(139, 92, 246, 0.15); border: 1px solid var(--neon-violet); border-radius: 50px; font-size: 0.9rem; color: var(--neon-cyan); }
+        section { margin: 2.5rem 0; }
+        h2 { font-size: 1.5rem; color: var(--neon-cyan); margin-bottom: 1rem; border-left: 4px solid var(--neon-cyan); padding-left: 10px; }
+        p { color: var(--text-muted); margin-bottom: 1rem; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1.5rem; margin-top: 1.5rem; }
+        .card { background-color: var(--panel-bg); border: 1px solid rgba(255,255,255,0.05); border-radius: 12px; padding: 1.5rem; transition: transform 0.2s, border-color 0.2s; }
+        .card:hover { transform: translateY(-3px); border-color: var(--neon-cyan); }
+        .card h3 { color: var(--text-main); margin-bottom: 0.5rem; font-size: 1.1rem; }
+        code { background: rgba(0,0,0,0.3); padding: 0.2rem 0.4rem; border-radius: 4px; font-family: monospace; color: var(--neon-cyan); font-size: 0.9rem; }
+        footer { text-align: center; padding: 2rem 0; border-top: 1px solid rgba(255,255,255,0.1); color: var(--text-muted); font-size: 0.9rem; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Penta AI Voice Assistant</h1>
+            <p class="subtitle">An advanced cross-platform voice assistant powered by Gemini AI and Flutter</p>
+            <div class="developer">Developed by Divyanshu Kumar</div>
+        </header>
+
+        <section>
+            <h2>Overview</h2>
+            <p>Penta is a feature-rich, intelligent voice assistant built using Flutter for mobile and Android overlay integrations. It connects voice recognition, text-to-speech, Google Gemini AI, Firebase Authentication, and native device actions into a seamless user experience.</p>
+        </section>
+
+        <section>
+            <h2>Core Features</h2>
+            <div class="grid">
+                <div class="card">
+                    <h3>AI Chat & Voice</h3>
+                    <p>Powered by Google Gemini <code>gemini-2.5-flash</code> for quick, contextual multilingual answers in English, Hindi, and Hinglish.</p>
+                </div>
+                <div class="card">
+                    <h3>Device & App Control</h3>
+                    <p>Native Kotlin bridge integration to execute device-level commands, open installed applications, and manage screenshots/mic services.</p>
+                </div>
+                <div class="card">
+                    <h3>Image Generation</h3>
+                    <p>Create AI-generated images directly within the app interface using dedicated generative image models.</p>
+                </div>
+                <div class="card">
+                    <h3>Music & Media</h3>
+                    <p>Integrated YouTube Music playback capability with automatic top result lookup.</p>
+                </div>
+                <div class="card">
+                    <h3>Firebase Backend</h3>
+                    <p>Secure user authentication and cloud data storage managed via Firebase Auth and Firestore.</p>
+                </div>
+                <div class="card">
+                    <h3>Permission Disclosure</h3>
+                    <p>Transparent permission handling for microphone, accessibility, and background services.</p>
+                </div>
+            </div>
+        </section>
+
+        <section>
+            <h2>Tech Stack</h2>
+            <p><strong>Framework:</strong> Flutter (Dart SDK >=3.3.0)</p>
+            <p><strong>AI & Services:</strong> Google Gemini API, Firebase (Auth, Core, Firestore), Speech-to-Text, Flutter TTS</p>
+            <p><strong>Platform:</strong> Android (Kotlin native bridges for overlay and accessibility services)</p>
+        </section>
+
+        <footer>
+            <p>&copy; 2026 Penta AI Voice Assistant. Developed by Divyanshu Kumar.</p>
+        </footer>
+    </div>
+</body>
+</html>
+
+```
