@@ -57,9 +57,5 @@ class LocalStore {
     await prefs.setStringList('images', <String>[file.path, ...imagePaths()]);
     return file.path;
   }
-}  static String getLanguage() => prefs.getString('language') ?? 'English';
-
-  static Future<void> setLanguage(String lang) async {
-    await prefs.setString('language', lang);
-  }
+}
 
