@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="accessibility_desc">Lets Penta take a screenshot when you ask. Penta does not read your screen.</string>
+</resources>
