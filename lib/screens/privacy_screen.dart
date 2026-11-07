@@ -14,7 +14,7 @@ class DisclosureScreen extends StatelessWidget {
     ['Phone', 'Only to place a call after you confirm it.'],
     ['Notifications', 'Required by Android to show a visible notice while optional background listening is on.'],
     ['Modify system settings', 'Only to change screen brightness when you ask.'],
-        ['Accessibility (optional)', 'Only when you ask: take a screenshot, lock the screen, or type or search in another app. Penta reads the open screen only to find the text box or button you asked for.'],
+         ['Accessibility (optional)', 'Only when you ask: screenshot, lock the screen, go home or back, scroll, tap a button, type or search in another app, or read the screen. When you say "read my screen", the visible text (never passwords) is sent to the AI to summarise it.'],
   ];
 
   @override
