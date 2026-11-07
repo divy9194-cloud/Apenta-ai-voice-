@@ -23,9 +23,10 @@ class _ImagesScreenState extends State<ImagesScreen> {
     try {
       await AiClient.image(text);
       _prompt.clear();
-    } catch (_) {
+        } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not generate the image.')));
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Image problem: ${e.toString().replaceFirst('Exception: ', '')}')));
       }
     }
     if (mounted) setState(() => _busy = false);
