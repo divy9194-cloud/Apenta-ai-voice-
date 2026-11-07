@@ -51,12 +51,32 @@ class MainActivity : FlutterActivity() {
                         "pressSearch" -> pressSearch(result)
                         "saveToGallery" -> result.success(saveToGallery(call.argument<String>("path") ?: ""))
                         "searchInOpenApp" -> searchInOpenApp(call.argument<String>("query") ?: "", result)
+                        "scroll" -> inOtherApp(result) { svc -> svc.scroll(call.argument<Boolean>("forward") != false) }
+                        "tapText" -> inOtherApp(result) { svc -> svc.clickByText(call.argument<String>("text") ?: "") }
+                        "readScreen" -> inOtherApp(result) { svc -> svc.screenText() }
                         else -> result.success(handle(call))
                     }
                 } catch (e: Exception) {
                     result.error("PENTA", e.message, null)
                 }
             }
+    }
+
+    // Steps back to the previous app, then runs the action on that app's screen.
+    private fun inOtherApp(result: MethodChannel.Result, block: (ScreenshotService) -> Any?) {
+        val svc = ScreenshotService.instance
+        if (svc == null) {
+            result.success("no_service")
+            return
+        }
+        moveTaskToBack(true)
+        ui.postDelayed({
+            try {
+                result.success(block(svc))
+            } catch (e: Exception) {
+                result.success(false)
+            }
+        }, 800)
     }
 
     // Steps back to the previous app, then types into its focused text box.
@@ -219,6 +239,7 @@ class MainActivity : FlutterActivity() {
             "timer" -> launch(
                 Intent(AlarmClock.ACTION_SET_TIMER)
                     .putExtra(AlarmClock.EXTRA_LENGTH, call.argument<Int>("seconds") ?: 60)
+                    .putExtra(AlarmClock.EXTRA_MESSAGE, call.argument<String>("message") ?: "Penta timer")
                     .putExtra(AlarmClock.EXTRA_SKIP_UI, true)
             )
             "settingsPage" -> {
@@ -240,6 +261,47 @@ class MainActivity : FlutterActivity() {
                 am.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_UP, code))
                 true
             }
+            "volume" -> {
+                val am = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+                val max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+                when (call.argument<String>("action")) {
+                    "up" -> repeat(3) {
+                        am.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_RAISE, AudioManager.FLAG_SHOW_UI)
+                    }
+                    "down" -> repeat(3) {
+                        am.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_LOWER, AudioManager.FLAG_SHOW_UI)
+                    }
+                    "mute" -> am.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_MUTE, AudioManager.FLAG_SHOW_UI)
+                    "unmute" -> am.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_UNMUTE, AudioManager.FLAG_SHOW_UI)
+                    "set" -> {
+                        val percent = (call.argument<Int>("percent") ?: 50).coerceIn(0, 100)
+                        am.setStreamVolume(AudioManager.STREAM_MUSIC, percent * max / 100, AudioManager.FLAG_SHOW_UI)
+                    }
+                }
+                am.getStreamVolume(AudioManager.STREAM_MUSIC) * 100 / max
+            }
+            "muteBeeps" -> {
+                val am = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+                val on = call.argument<Boolean>("on") == true
+                val media = call.argument<Boolean>("media") == true
+                val direction = if (on) AudioManager.ADJUST_MUTE else AudioManager.ADJUST_UNMUTE
+                val streams = mutableListOf(AudioManager.STREAM_NOTIFICATION, AudioManager.STREAM_SYSTEM)
+                if (media) streams.add(AudioManager.STREAM_MUSIC)
+                var any = false
+                for (s in streams) {
+                    try {
+                        am.adjustStreamVolume(s, direction, 0)
+                        any = true
+                    } catch (e: Exception) {
+                    }
+                }
+                any
+            }
+            "closeApp" -> {
+                moveTaskToBack(true)
+                true
+            }
+            "openBatterySettings" -> launch(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
             "camera" -> launch(Intent(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA))
             "gallery" -> launch(Intent(Intent.ACTION_VIEW).setType("image/*"))
             "openUrl" -> launch(Intent(Intent.ACTION_VIEW, Uri.parse(call.argument<String>("url") ?: "")))
@@ -256,6 +318,23 @@ class MainActivity : FlutterActivity() {
             "lockScreen" -> {
                 val svc = ScreenshotService.instance
                 if (svc == null) false else svc.lockScreen()
+            }
+            "globalAction" -> {
+                val svc = ScreenshotService.instance
+                if (svc == null) {
+                    false
+                } else {
+                    val code = when (call.argument<String>("name")) {
+                        "home" -> AccessibilityService.GLOBAL_ACTION_HOME
+                        "back" -> AccessibilityService.GLOBAL_ACTION_BACK
+                        "recents" -> AccessibilityService.GLOBAL_ACTION_RECENTS
+                        "notifications" -> AccessibilityService.GLOBAL_ACTION_NOTIFICATIONS
+                        "quick" -> AccessibilityService.GLOBAL_ACTION_QUICK_SETTINGS
+                        "power" -> AccessibilityService.GLOBAL_ACTION_POWER_DIALOG
+                        else -> -1
+                    }
+                    if (code < 0) false else svc.performGlobalAction(code)
+                }
             }
             "consumeAssistLaunch" -> {
                 val requested = assistRequested
