@@ -83,7 +83,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           ListTile(
             leading: const Icon(Icons.screenshot),
-            title: const Text('Allow screenshots (Accessibility)'),
+            title: const Text('Allow Accessibility (screenshot, lock, type)'),
             onTap: () {
               Device.askScreenshotAccess();
             },
