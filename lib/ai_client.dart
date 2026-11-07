@@ -16,47 +16,70 @@ class AiClient {
         'x-goog-api-key': AppEnv.geminiKey,
       };
 
+  static String _short(String s) => s.length > 160 ? s.substring(0, 160) : s;
+
   static Future<String> chat(String prompt, List<ChatEntry> history) async {
     if (AppEnv.geminiKey.isEmpty) return 'The Gemini API key is not configured.';
-    final List<ChatEntry> recent =
-        List<ChatEntry>.from(history.length > 10 ? history.sublist(history.length - 10) : history);
-    while (recent.isNotEmpty && !recent.first.fromUser) {
-      recent.removeAt(0);
-    }
-    final List<Map<String, dynamic>> contents = <Map<String, dynamic>>[];
-    for (final ChatEntry e in recent) {
+    try {
+      final List<ChatEntry> recent =
+          List<ChatEntry>.from(history.length > 10 ? history.sublist(history.length - 10) : history);
+      while (recent.isNotEmpty && !recent.first.fromUser) {
+        recent.removeAt(0);
+      }
+      final List<Map<String, dynamic>> contents = <Map<String, dynamic>>[];
+      for (final ChatEntry e in recent) {
+        contents.add({
+          'role': e.fromUser ? 'user' : 'model',
+          'parts': [
+            {'text': e.text}
+          ],
+        });
+      }
       contents.add({
-        'role': e.fromUser ? 'user' : 'model',
+        'role': 'user',
         'parts': [
-          {'text': e.text}
+          {'text': prompt}
         ],
       });
+      final http.Response res = await http
+          .post(
+            Uri.parse('$_base/${AppEnv.chatModel}:generateContent'),
+            headers: _headers,
+            body: jsonEncode({
+              'systemInstruction': {
+                'parts': [
+                  {'text': _persona}
+                ]
+              },
+              'contents': contents,
+            }),
+          )
+          .timeout(const Duration(seconds: 60));
+      if (res.statusCode != 200) {
+        final String body = utf8.decode(res.bodyBytes);
+        return 'The AI service returned error ${res.statusCode}. ${_short(body)}';
+      }
+      final Map<String, dynamic> data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+      final List<dynamic>? candidates = data['candidates'] as List<dynamic>?;
+      if (candidates == null || candidates.isEmpty) {
+        return 'The AI gave no answer. It may have been blocked, so try asking differently.';
+      }
+      final Map<dynamic, dynamic> first = candidates.first as Map;
+      final Map<dynamic, dynamic>? content = first['content'] as Map?;
+      final List<dynamic> parts = (content?['parts'] as List<dynamic>?) ?? <dynamic>[];
+      final StringBuffer out = StringBuffer();
+      for (final dynamic p in parts) {
+        final Map<dynamic, dynamic> part = p as Map;
+        if (part['thought'] == true) continue;
+        final dynamic t = part['text'];
+        if (t is String) out.write(t);
+      }
+      final String answer = out.toString().trim();
+      if (answer.isEmpty) return 'The AI returned an empty answer. Please try again.';
+      return answer;
+    } catch (e) {
+      return 'AI error: ${_short(e.toString())}';
     }
-    contents.add({
-      'role': 'user',
-      'parts': [
-        {'text': prompt}
-      ],
-    });
-    final http.Response res = await http
-        .post(
-          Uri.parse('$_base/${AppEnv.chatModel}:generateContent'),
-          headers: _headers,
-          body: jsonEncode({
-            'systemInstruction': {
-              'parts': [
-                {'text': _persona}
-              ]
-            },
-            'contents': contents,
-          }),
-        )
-        .timeout(const Duration(seconds: 30));
-    if (res.statusCode != 200) return 'The AI service returned error ${res.statusCode}.';
-    final Map<String, dynamic> data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
-    final List<dynamic> parts =
-        (((data['candidates'] as List<dynamic>).first as Map)['content'] as Map)['parts'] as List<dynamic>;
-    return ((parts.first as Map)['text']).toString().trim();
   }
 
   /// Returns the saved image file path.
