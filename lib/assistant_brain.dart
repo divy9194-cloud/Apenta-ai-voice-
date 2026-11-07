@@ -33,6 +33,7 @@ class AssistantBrain extends ChangeNotifier {
   PendingAsk? pending;
   bool active = false;
   bool background = false;
+  bool continuous = false;
   bool thinking = false;
   String liveText = '';
   String lastEvent = '';
@@ -43,6 +44,7 @@ class AssistantBrain extends ChangeNotifier {
   bool _micReady = false;
   bool _working = false;
   bool _disposed = false;
+  bool _expectMore = false;
   String _lastHeard = '';
   DateTime _lastHeardAt = DateTime(2000);
   String? _locale;
@@ -55,9 +57,17 @@ class AssistantBrain extends ChangeNotifier {
 
   void refresh() => notifyListeners();
 
+  /// True when the mic should reopen after Penta finishes speaking.
+  bool _shouldResume() => continuous || background || pending != null || _expectMore;
+
   void _startWatchdog() {
     _watchdog ??= Timer.periodic(const Duration(seconds: 3), (Timer t) {
-      if (_keepListening && _micReady && !_speaking && !_working && !_stt.isListening) {
+      if ((continuous || background) &&
+          _keepListening &&
+          _micReady &&
+          !_speaking &&
+          !_working &&
+          !_stt.isListening) {
         _listenOnce();
       }
     });
@@ -70,6 +80,7 @@ class AssistantBrain extends ChangeNotifier {
       await _tts.setSpeechRate(0.5);
     } catch (_) {}
     background = LocalStore.flag('background');
+    continuous = LocalStore.flag('continuous');
     notifyListeners();
     if (background) {
       final bool ok = await _prepareMic();
@@ -98,17 +109,24 @@ class AssistantBrain extends ChangeNotifier {
         if (status == 'done' || status == 'notListening') {
           if (liveText.trim().isNotEmpty && !_working && !_speaking) {
             _heard(liveText);
-          }
-          if (_keepListening) {
-            Future<void>.delayed(const Duration(milliseconds: 400), _listenOnce);
+          } else if (!_working && !_speaking && _keepListening) {
+            if (_shouldResume()) {
+              Future<void>.delayed(const Duration(milliseconds: 400), _listenOnce);
+            } else {
+              _endSession();
+            }
           }
         }
       },
       onError: (dynamic error) {
         lastEvent = 'mic error: $error';
         notifyListeners();
-        if (_keepListening) {
-          Future<void>.delayed(const Duration(seconds: 1), _listenOnce);
+        if (_keepListening && !_working && !_speaking) {
+          if (_shouldResume()) {
+            Future<void>.delayed(const Duration(seconds: 1), _listenOnce);
+          } else {
+            _endSession();
+          }
         }
       },
     );
@@ -162,6 +180,18 @@ class AssistantBrain extends ChangeNotifier {
     }
   }
 
+  /// Ends one listening session. In background mode the mic stays open for the wake phrase.
+  Future<void> _endSession() async {
+    active = false;
+    _keepListening = background;
+    liveText = '';
+    level = 0.0;
+    try {
+      await _stt.stop();
+    } catch (_) {}
+    notifyListeners();
+  }
+
   Future<void> _heard(String raw) async {
     final String text = raw.toLowerCase().trim();
     final bool duplicate = text == _lastHeard && DateTime.now().difference(_lastHeardAt).inSeconds < 4;
@@ -183,10 +213,15 @@ class AssistantBrain extends ChangeNotifier {
       final String command = wake == null ? text : text.replaceFirst(_wakeWords, '').trim();
       if (command.isEmpty) {
         liveText = '';
+        _expectMore = true;
         await speak('Yes, how can I help?');
+        _expectMore = false;
         return;
       }
       await runCommand(command, spoken: true);
+      if (!_shouldResume()) {
+        await _endSession();
+      }
     } finally {
       _working = false;
     }
@@ -246,7 +281,7 @@ class AssistantBrain extends ChangeNotifier {
       await _tts.speak(text).timeout(const Duration(seconds: 20), onTimeout: () => null);
     } catch (_) {}
     _speaking = false;
-    if (_keepListening) _listenOnce();
+    if (_keepListening && _shouldResume()) _listenOnce();
   }
 
   void _log(String text, bool fromUser) {
@@ -266,23 +301,23 @@ class AssistantBrain extends ChangeNotifier {
 
   Future<void> toggle() async {
     if (active) {
-      active = false;
+      await _endSession();
       pending = null;
-      if (!background) {
-        _keepListening = false;
-        try {
-          await _stt.stop();
-        } catch (_) {}
-      }
-      notifyListeners();
       return;
     }
     if (!await _prepareMic()) return;
     active = true;
     _keepListening = true;
+    _expectMore = false;
     _startWatchdog();
     notifyListeners();
     _listenOnce();
+  }
+
+  Future<void> setContinuous(bool on) async {
+    continuous = on;
+    await LocalStore.setFlag('continuous', on);
+    notifyListeners();
   }
 
   /// Optional background listening (foreground service + visible notification).
