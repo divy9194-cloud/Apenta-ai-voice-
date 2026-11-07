@@ -17,6 +17,11 @@ class Device {
     return r == true;
   }
 
+  static Future<String> _status(String name, [Map<String, dynamic>? args]) async {
+    final dynamic r = await _call(name, args);
+    return r is String ? r : 'error';
+  }
+
   static Future<bool> torch(bool on) => _flag('torch', {'on': on});
   static Future<bool> canWriteSettings() => _flag('canWriteSettings');
   static Future<void> askWriteSettings() async {
@@ -61,11 +66,24 @@ class Device {
   static Future<bool> camera() => _flag('camera');
   static Future<bool> gallery() => _flag('gallery');
   static Future<bool> openUrl(String url) => _flag('openUrl', {'url': url});
+
+  // Accessibility features (screenshot, lock, type, search)
   static Future<bool> screenshot() => _flag('screenshot');
   static Future<bool> screenshotReady() => _flag('screenshotReady');
   static Future<void> askScreenshotAccess() async {
     await _call('askScreenshotAccess');
   }
+
+  static Future<bool> lockScreen() => _flag('lockScreen');
+
+  /// Returns: ok, no_service, no_field
+  static Future<String> typeText(String text) => _status('typeText', {'text': text});
+
+  /// Returns: ok, no_service, failed
+  static Future<String> pressSearch() => _status('pressSearch');
+
+  /// Returns: ok, no_service, no_search_box, no_field
+  static Future<String> searchInOpenApp(String query) => _status('searchInOpenApp', {'query': query});
 
   /// True once after Penta was opened with a long press on Home.
   static Future<bool> consumeAssistLaunch() => _flag('consumeAssistLaunch');
