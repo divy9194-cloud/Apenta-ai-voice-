@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
@@ -34,6 +35,7 @@ class AssistantBrain extends ChangeNotifier {
   bool background = false;
   bool thinking = false;
   String liveText = '';
+  String lastEvent = '';
   double level = 0.0;
 
   bool _keepListening = false;
@@ -44,6 +46,7 @@ class AssistantBrain extends ChangeNotifier {
   String _lastHeard = '';
   DateTime _lastHeardAt = DateTime(2000);
   String? _locale;
+  Timer? _watchdog;
 
   @override
   void notifyListeners() {
@@ -51,6 +54,14 @@ class AssistantBrain extends ChangeNotifier {
   }
 
   void refresh() => notifyListeners();
+
+  void _startWatchdog() {
+    _watchdog ??= Timer.periodic(const Duration(seconds: 3), (Timer t) {
+      if (_keepListening && _micReady && !_speaking && !_working && !_stt.isListening) {
+        _listenOnce();
+      }
+    });
+  }
 
   Future<void> start() async {
     entries = LocalStore.loadChat();
@@ -65,6 +76,7 @@ class AssistantBrain extends ChangeNotifier {
       if (ok) {
         await Device.startListenService();
         _keepListening = true;
+        _startWatchdog();
         _listenOnce();
       } else {
         background = false;
@@ -81,16 +93,29 @@ class AssistantBrain extends ChangeNotifier {
     if (!ok) return false;
     _micReady = await _stt.initialize(
       onStatus: (String status) {
-        if ((status == 'done' || status == 'notListening') && _keepListening) {
-          Future<void>.delayed(const Duration(milliseconds: 400), _listenOnce);
+        lastEvent = 'mic: $status';
+        notifyListeners();
+        if (status == 'done' || status == 'notListening') {
+          if (liveText.trim().isNotEmpty && !_working && !_speaking) {
+            _heard(liveText);
+          }
+          if (_keepListening) {
+            Future<void>.delayed(const Duration(milliseconds: 400), _listenOnce);
+          }
         }
       },
       onError: (dynamic error) {
+        lastEvent = 'mic error: $error';
+        notifyListeners();
         if (_keepListening) {
           Future<void>.delayed(const Duration(seconds: 1), _listenOnce);
         }
       },
     );
+    if (!_micReady) {
+      lastEvent = 'mic could not start (check Google speech service)';
+      notifyListeners();
+    }
     if (_micReady) {
       try {
         final locales = await _stt.locales();
@@ -108,7 +133,7 @@ class AssistantBrain extends ChangeNotifier {
       await _stt.listen(
         onResult: _onResult,
         listenFor: const Duration(minutes: 10),
-        pauseFor: const Duration(seconds: 5),
+        pauseFor: const Duration(seconds: 4),
         localeId: _locale,
         onSoundLevelChange: _onLevel,
         listenOptions: SpeechListenOptions(
@@ -117,7 +142,10 @@ class AssistantBrain extends ChangeNotifier {
           listenMode: ListenMode.dictation,
         ),
       );
-    } catch (_) {}
+    } catch (e) {
+      lastEvent = 'listen failed: $e';
+      notifyListeners();
+    }
   }
 
   void _onLevel(double l) {
@@ -144,7 +172,11 @@ class AssistantBrain extends ChangeNotifier {
     try {
       final RegExpMatch? wake = _wakeWords.firstMatch(text);
       if (!active) {
-        if (wake == null) return; // waiting for "Hey Penta"
+        if (wake == null) {
+          liveText = '';
+          notifyListeners();
+          return; // waiting for "Hey Penta"
+        }
         active = true;
         notifyListeners();
       }
@@ -211,7 +243,7 @@ class AssistantBrain extends ChangeNotifier {
       await _stt.stop();
       final bool hindi = RegExp(r'[\u0900-\u097F]').hasMatch(text);
       await _tts.setLanguage(hindi ? 'hi-IN' : 'en-IN');
-      await _tts.speak(text);
+      await _tts.speak(text).timeout(const Duration(seconds: 20), onTimeout: () => null);
     } catch (_) {}
     _speaking = false;
     if (_keepListening) _listenOnce();
@@ -248,8 +280,9 @@ class AssistantBrain extends ChangeNotifier {
     if (!await _prepareMic()) return;
     active = true;
     _keepListening = true;
+    _startWatchdog();
     notifyListeners();
-    await speak('Penta is listening.');
+    _listenOnce();
   }
 
   /// Optional background listening (foreground service + visible notification).
@@ -263,6 +296,7 @@ class AssistantBrain extends ChangeNotifier {
       await Device.startListenService();
       background = true;
       _keepListening = true;
+      _startWatchdog();
       await LocalStore.setFlag('background', true);
       _listenOnce();
     } else {
@@ -290,6 +324,7 @@ class AssistantBrain extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _keepListening = false;
+    _watchdog?.cancel();
     _stt.cancel();
     _tts.stop();
     Device.stopListenService();
