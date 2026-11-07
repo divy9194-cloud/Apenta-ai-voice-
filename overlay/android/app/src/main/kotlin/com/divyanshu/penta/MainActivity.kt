@@ -9,6 +9,7 @@ import android.media.AudioManager
 import android.net.Uri
 import android.os.BatteryManager
 import android.os.Build
+import android.os.Bundle
 import android.provider.AlarmClock
 import android.provider.ContactsContract
 import android.provider.MediaStore
@@ -20,6 +21,22 @@ import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
+
+    private var assistRequested = false
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        if (intent?.getBooleanExtra("penta_listen", false) == true) {
+            assistRequested = true
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        if (intent.getBooleanExtra("penta_listen", false)) {
+            assistRequested = true
+        }
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -162,6 +179,23 @@ class MainActivity : FlutterActivity() {
                 } else {
                     svc.performGlobalAction(AccessibilityService.GLOBAL_ACTION_TAKE_SCREENSHOT)
                 }
+            }
+            "consumeAssistLaunch" -> {
+                val requested = assistRequested
+                assistRequested = false
+                requested
+            }
+            "openAssistantSettings" -> {
+                var ok = false
+                val actions = listOf(
+                    Settings.ACTION_VOICE_INPUT_SETTINGS,
+                    Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS,
+                    Settings.ACTION_SETTINGS
+                )
+                for (action in actions) {
+                    if (!ok) ok = launch(Intent(action))
+                }
+                ok
             }
             "startListen" -> {
                 val i = Intent(this, MicService::class.java)
