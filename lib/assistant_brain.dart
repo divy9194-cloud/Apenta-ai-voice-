@@ -31,6 +31,10 @@ class AssistantBrain extends ChangeNotifier {
 
   List<ChatEntry> entries = <ChatEntry>[];
   PendingAsk? pending;
+
+  /// When a screen (like the camera assistant) sets this, spoken sentences go to it instead of the router.
+  Future<void> Function(String text)? onHeardOverride;
+
   bool active = false;
   bool background = false;
   bool continuous = false;
@@ -57,6 +61,9 @@ class AssistantBrain extends ChangeNotifier {
   }
 
   void refresh() => notifyListeners();
+
+  /// Adds a line to the chat history (used by the camera assistant).
+  void addEntry(String text, bool fromUser) => _log(text, fromUser);
 
   /// True when the mic should reopen after Penta finishes speaking.
   bool _shouldResume() => continuous || background || pending != null || _expectMore;
@@ -230,6 +237,16 @@ class AssistantBrain extends ChangeNotifier {
         _expectMore = true;
         await speak('Yes, how can I help?');
         _expectMore = false;
+        return;
+      }
+      final Future<void> Function(String text)? hook = onHeardOverride;
+      if (hook != null && !_stopWords.hasMatch(command)) {
+        liveText = '';
+        notifyListeners();
+        await hook(command);
+        if (!_shouldResume()) {
+          await _endSession();
+        }
         return;
       }
       await runCommand(command, spoken: true);
