@@ -32,10 +32,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
             subtitle: Text(user?.email ?? ''),
           ),
           SwitchListTile(
+            secondary: const Icon(Icons.repeat),
+            title: const Text('Continuous listening'),
+            subtitle: const Text(
+                'Keeps the mic open for many commands in a row. Android plays a "ding" each time the mic restarts, so this is off by default.'),
+            value: widget.brain.continuous,
+            onChanged: (bool on) async {
+              await widget.brain.setContinuous(on);
+              setState(() {});
+            },
+          ),
+          SwitchListTile(
             secondary: const Icon(Icons.mic),
             title: const Text('"Hey Penta" background mode'),
             subtitle: const Text(
-                'Keeps listening for the wake phrase, also after screen lock, with a visible notification. Off by default.'),
+                'Keeps listening for the wake phrase, also after screen lock, with a visible notification. Off by default. This will ding often.'),
             value: widget.brain.background,
             onChanged: (bool on) async {
               final String? error = await widget.brain.setBackground(on);
