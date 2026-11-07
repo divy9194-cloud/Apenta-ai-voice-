@@ -39,8 +39,8 @@ class CommandRouter {
         await AiClient.image(m.group(1)!);
         brain.refresh();
         return 'Your image is ready. You can see it in the Images tab.';
-      } catch (_) {
-        return 'Sorry, I could not generate that image.';
+            } catch (e) {
+        return 'Image problem: ${e.toString().replaceFirst('Exception: ', '')}';
       }
     }
 
