@@ -3,6 +3,7 @@ import '../assistant_brain.dart';
 import '../widgets/common.dart';
 import '../widgets/penta_orb.dart';
 import '../widgets/wave_bars.dart';
+import 'camera_assist_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key, required this.brain});
@@ -29,8 +30,30 @@ class HomeScreen extends StatelessWidget {
         return SafeArea(
           child: Column(
             children: [
-              const SizedBox(height: 20),
-              Text(status, style: const TextStyle(fontSize: 18, color: Colors.white70, letterSpacing: 1)),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(56, 12, 8, 0),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        status,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontSize: 18, color: Colors.white70, letterSpacing: 1),
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Camera assistant',
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute<void>(builder: (BuildContext c) => CameraAssistScreen(brain: brain)),
+                        );
+                      },
+                      icon: const Icon(Icons.center_focus_strong, color: neonCyan),
+                    ),
+                  ],
+                ),
+              ),
               Expanded(
                 child: Center(
                   child: PentaOrb(listening: brain.active, level: brain.level, onTap: brain.toggle),
