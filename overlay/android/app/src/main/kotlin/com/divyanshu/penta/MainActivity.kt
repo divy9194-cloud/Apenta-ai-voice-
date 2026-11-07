@@ -10,6 +10,8 @@ import android.net.Uri
 import android.os.BatteryManager
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.provider.AlarmClock
 import android.provider.ContactsContract
 import android.provider.MediaStore
@@ -23,6 +25,7 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity : FlutterActivity() {
 
     private var assistRequested = false
+    private val ui = Handler(Looper.getMainLooper())
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -43,11 +46,67 @@ class MainActivity : FlutterActivity() {
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "penta/device")
             .setMethodCallHandler { call, result ->
                 try {
-                    result.success(handle(call))
+                    when (call.method) {
+                        "typeText" -> typeText(call.argument<String>("text") ?: "", result)
+                        "pressSearch" -> pressSearch(result)
+                        "searchInOpenApp" -> searchInOpenApp(call.argument<String>("query") ?: "", result)
+                        else -> result.success(handle(call))
+                    }
                 } catch (e: Exception) {
                     result.error("PENTA", e.message, null)
                 }
             }
+    }
+
+    // Steps back to the previous app, then types into its focused text box.
+    private fun typeText(text: String, result: MethodChannel.Result) {
+        val svc = ScreenshotService.instance
+        if (svc == null) {
+            result.success("no_service")
+            return
+        }
+        moveTaskToBack(true)
+        ui.postDelayed({
+            val ok = svc.typeIntoFocused(text)
+            result.success(if (ok) "ok" else "no_field")
+        }, 900)
+    }
+
+    private fun pressSearch(result: MethodChannel.Result) {
+        val svc = ScreenshotService.instance
+        if (svc == null) {
+            result.success("no_service")
+            return
+        }
+        moveTaskToBack(true)
+        ui.postDelayed({
+            result.success(if (svc.pressSearch()) "ok" else "failed")
+        }, 900)
+    }
+
+    // The app is already launching. Wait, open its search box, type, and press search.
+    private fun searchInOpenApp(query: String, result: MethodChannel.Result) {
+        val svc = ScreenshotService.instance
+        if (svc == null) {
+            result.success("no_service")
+            return
+        }
+        ui.postDelayed({
+            if (!svc.openSearchBox()) {
+                result.success("no_search_box")
+                return@postDelayed
+            }
+            ui.postDelayed({
+                if (!svc.typeIntoFocused(query)) {
+                    result.success("no_field")
+                    return@postDelayed
+                }
+                ui.postDelayed({
+                    svc.pressSearch()
+                    result.success("ok")
+                }, 500)
+            }, 800)
+        }, 1800)
     }
 
     private fun launch(intent: Intent): Boolean {
@@ -179,6 +238,10 @@ class MainActivity : FlutterActivity() {
                 } else {
                     svc.performGlobalAction(AccessibilityService.GLOBAL_ACTION_TAKE_SCREENSHOT)
                 }
+            }
+            "lockScreen" -> {
+                val svc = ScreenshotService.instance
+                if (svc == null) false else svc.lockScreen()
             }
             "consumeAssistLaunch" -> {
                 val requested = assistRequested
