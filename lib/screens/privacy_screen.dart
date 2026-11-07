@@ -9,6 +9,7 @@ class DisclosureScreen extends StatelessWidget {
 
   static const List<List<String>> _rows = <List<String>>[
     ['Microphone', 'To hear your voice commands and the wake phrase. Audio is used only while Penta is listening. Recognised text may be sent to Google speech services and your AI provider to answer you.'],
+    ['Camera', 'Only inside the Camera assistant. A picture is sent to the AI when you ask a question about what the camera sees. Photos you take are saved on your device.'],
     ['Contacts', 'Only when you ask Penta to call or message someone, to find that person\'s number. Contacts are never uploaded or stored.'],
     ['Phone', 'Only to place a call after you confirm it.'],
     ['Notifications', 'Required by Android to show a visible notice while optional background listening is on.'],
