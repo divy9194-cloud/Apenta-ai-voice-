@@ -49,6 +49,7 @@ class AssistantBrain extends ChangeNotifier {
   DateTime _lastHeardAt = DateTime(2000);
   String? _locale;
   Timer? _watchdog;
+  Timer? _assistPoll;
 
   @override
   void notifyListeners() {
@@ -82,6 +83,13 @@ class AssistantBrain extends ChangeNotifier {
     background = LocalStore.flag('background');
     continuous = LocalStore.flag('continuous');
     notifyListeners();
+
+    // Checks whether Penta was opened by a long press on Home.
+    _assistPoll ??= Timer.periodic(const Duration(milliseconds: 800), (Timer t) async {
+      final bool launched = await Device.consumeAssistLaunch();
+      if (launched) await startFromAssist();
+    });
+
     if (background) {
       final bool ok = await _prepareMic();
       if (ok) {
@@ -93,6 +101,12 @@ class AssistantBrain extends ChangeNotifier {
         background = false;
       }
     }
+  }
+
+  /// Starts listening right away when opened as the default assistant.
+  Future<void> startFromAssist() async {
+    if (active) return;
+    await toggle();
   }
 
   Future<bool> _prepareMic() async {
@@ -360,6 +374,7 @@ class AssistantBrain extends ChangeNotifier {
     _disposed = true;
     _keepListening = false;
     _watchdog?.cancel();
+    _assistPoll?.cancel();
     _stt.cancel();
     _tts.stop();
     Device.stopListenService();
