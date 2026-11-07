@@ -3,6 +3,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'ai_client.dart';
 import 'assistant_brain.dart';
 import 'env.dart';
+import 'local_store.dart';
 import 'music_player.dart';
 import 'native_bridge.dart';
 import 'permission_helper.dart';
@@ -26,6 +27,10 @@ class CommandRouter {
     t = t.replaceAll(RegExp(r'\bg mail\b'), 'gmail');
     return t;
   }
+
+  String get _style =>
+      '(Reply like a close friend in friendly Hinglish, call me ${brain.callName}, keep it under 50 words, '
+      'no emojis, no markdown. If I speak another language, reply in that language.) ';
 
   Future<String> route(String raw) async {
     // Removes a leading "Penta" or "Hey Penta" so the real command is matched.
@@ -54,9 +59,53 @@ class CommandRouter {
       return _openCameraAssist();
     }
 
+    // Phone control
+    if (_is(t, r'^(go )?home( screen)?$|^go to (the )?home( screen)?$|^ghar jao$')) return _global('home', 'Going home.');
+    if (_is(t, r'^(go )?back$|^peeche (jao|chalo)$')) return _global('back', 'Going back.');
+    if (_is(t, r'recent apps|^recents$|show recent|^overview$')) return _global('recents', 'Showing recent apps.');
+    if (_is(t, r'(open|show|pull down) (the |my )?notifications?|notification (panel|shade|kholo)')) {
+      return _global('notifications', 'Opening notifications.');
+    }
+    if (_is(t, r'quick settings|control (panel|center|centre)')) return _global('quick', 'Opening quick settings.');
+    if (_is(t, r'power menu|shut ?down menu|power off menu')) return _global('power', 'Opening the power menu.');
+
+    m = RegExp(r'^scroll\s+(down|up)$|^(neeche|niche|upar)\s+scroll(?:\s+karo)?$').firstMatch(t);
+    if (m != null) {
+      final String word = m.group(1) ?? m.group(2) ?? 'down';
+      return _scroll(word == 'down' || word == 'neeche' || word == 'niche');
+    }
+
+    if (_is(t, r"read (the |my )?screen|what('s| is) on (the |my )?screen|screen (padho|padh)|explain (the |my )?screen|summari[sz]e (the |my )?screen")) {
+      return _readScreen();
+    }
+
     // Lock screen / screen off
     if (_is(t, r'\block (the )?(screen|phone|mobile)\b|screen (off|lock)|turn off (the )?screen|screen band|phone lock|lock karo')) {
       return _lockScreen();
+    }
+
+    // Time and date
+    if (_is(t, r"what('s| is) the time|current time|time kya hai|kitne baje|tell me the time")) {
+      return 'It is ${_timeText()}.';
+    }
+    if (_is(t, r"what('s| is) (the )?(date|day)|today's date|aaj (kya|kaun)|which day")) {
+      return 'Today is ${_dateText()}.';
+    }
+
+    // Reminder: "remind me in 10 minutes to drink water"
+    m = RegExp(r'^remind me (?:in|after)\s+(\d+)\s*(second|sec|minute|min|hour)s?\s*(?:to|that|about)?\s*(.*)$').firstMatch(t);
+    if (m != null) {
+      final int n = int.parse(m.group(1)!);
+      final String unit = m.group(2)!;
+      int seconds = n;
+      if (unit.startsWith('h')) {
+        seconds = n * 3600;
+      } else if (unit.startsWith('m')) {
+        seconds = n * 60;
+      }
+      final String what = (m.group(3) ?? '').trim();
+      final bool ok = await Device.timer(seconds, what.isEmpty ? 'Penta reminder' : what);
+      return ok ? 'Okay, I will remind you in $n $unit${n == 1 ? '' : 's'}.' : 'I could not set the reminder.';
     }
 
     // Type into the app that is open
@@ -106,6 +155,32 @@ class CommandRouter {
     if (m != null) {
       final String q = m.group(1)!.replaceFirst(RegExp(r'\bon (youtube|spotify)( music)?$'), '').trim();
       return MusicPlayer.play(q);
+    }
+
+    // Volume
+    if (_is(t, r'volume|awaaz|awaz')) {
+      String action = '';
+      int percent = 0;
+      final RegExpMatch? d = RegExp(r'(\d{1,3})').firstMatch(t);
+      if (d != null) {
+        action = 'set';
+        percent = int.parse(d.group(1)!);
+      } else if (_is(t, r'unmute')) {
+        action = 'unmute';
+      } else if (_is(t, r'\bmute\b|silent|chup')) {
+        action = 'mute';
+      } else if (_is(t, r'\bmax\b|\bfull\b')) {
+        action = 'set';
+        percent = 100;
+      } else if (_is(t, r'increase|\bup\b|raise|badha|zyada|louder|tez')) {
+        action = 'up';
+      } else if (_is(t, r'decrease|\bdown\b|lower|\bkam\b|ghata|softer|dheere')) {
+        action = 'down';
+      }
+      if (action.isNotEmpty) {
+        final int now = await Device.volume(action, percent);
+        return now < 0 ? 'I could not change the volume.' : 'Volume is at $now percent.';
+      }
     }
 
     // Flashlight
@@ -199,20 +274,44 @@ class CommandRouter {
       return (await Device.settingsPage('wifi')) ? 'Opening Wi-Fi settings.' : 'I could not open Wi-Fi settings.';
     }
 
+    // Tap a button or text on the screen: "tap subscribe"
+    m = RegExp(r'^(?:tap|click|press|select)\s+(?:on\s+)?(.+)$').firstMatch(t);
+    if (m != null && !_is(t, r'photo|picture|selfie|\bpic\b')) {
+      return _tapText(m.group(1)!.trim());
+    }
+
     // Open any app
     m = RegExp(r'^(?:please\s+)?(?:open|launch|start)\s+(.+)$').firstMatch(t);
     m ??= RegExp(r'^(.+?)\s+(?:kholo|khol do|khol de|open karo|chalu karo|chalao|start karo)$').firstMatch(t);
     if (m != null) return _openApp(m.group(1)!);
 
     // Everything else goes to the AI
-    final List<dynamic> history = brain.entries.length > 1
+    final List<ChatEntry> history = brain.entries.length > 1
         ? brain.entries.sublist(0, brain.entries.length - 1)
-        : <dynamic>[];
+        : <ChatEntry>[];
     try {
-      return await AiClient.chat(stripped, history.cast());
+      return await AiClient.chat('$_style$stripped', history);
     } catch (_) {
       return 'Sorry, I could not reach the AI service.';
     }
+  }
+
+  String _timeText() {
+    final DateTime n = DateTime.now();
+    final int h12 = n.hour % 12 == 0 ? 12 : n.hour % 12;
+    final String mm = n.minute.toString().padLeft(2, '0');
+    final String ap = n.hour >= 12 ? 'PM' : 'AM';
+    return '$h12:$mm $ap';
+  }
+
+  String _dateText() {
+    const List<String> days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    const List<String> months = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    final DateTime n = DateTime.now();
+    return '${days[n.weekday - 1]}, ${n.day} ${months[n.month - 1]} ${n.year}';
   }
 
   Future<String> _openCameraAssist() async {
@@ -225,6 +324,30 @@ class CommandRouter {
   Future<String> _needAccessibility(String what) async {
     await Device.askScreenshotAccess();
     return 'Please enable Penta under Accessibility so I can $what, then ask again.';
+  }
+
+  Future<String> _global(String name, String okText) async {
+    if (!await Device.screenshotReady()) return _needAccessibility('control the phone');
+    return (await Device.globalAction(name)) ? okText : 'I could not do that.';
+  }
+
+  Future<String> _scroll(bool forward) async {
+    if (!await Device.screenshotReady()) return _needAccessibility('scroll');
+    return (await Device.scroll(forward)) ? 'Scrolling.' : 'I could not find anything to scroll.';
+  }
+
+  Future<String> _tapText(String text) async {
+    if (!await Device.screenshotReady()) return _needAccessibility('tap on the screen');
+    return (await Device.tapText(text)) ? 'Tapped $text.' : 'I could not find $text on the screen.';
+  }
+
+  Future<String> _readScreen() async {
+    if (!await Device.screenshotReady()) return _needAccessibility('read the screen');
+    final String text = await Device.readScreen();
+    if (text.isEmpty || text == 'no_service' || text == 'error') return 'I could not read this screen.';
+    final String prompt = '$_style'
+        'This is the text visible on my phone screen right now. Tell me briefly what is on it:\n$text';
+    return AiClient.chat(prompt, <ChatEntry>[]);
   }
 
   Future<String> _lockScreen() async {
