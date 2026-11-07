@@ -49,6 +49,7 @@ class HomeScreen extends StatelessWidget {
                   style: TextStyle(fontSize: 17, color: brain.liveText.isNotEmpty ? Colors.white : Colors.white60),
                 ),
               ),
+              Text(brain.lastEvent, style: const TextStyle(fontSize: 11, color: Colors.white38)),
               const CreditLine(),
             ],
           ),
