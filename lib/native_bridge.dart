@@ -67,6 +67,9 @@ class Device {
   static Future<bool> gallery() => _flag('gallery');
   static Future<bool> openUrl(String url) => _flag('openUrl', {'url': url});
 
+  /// Copies a saved photo into the phone Gallery.
+  static Future<bool> saveToGallery(String path) => _flag('saveToGallery', {'path': path});
+
   // Accessibility features (screenshot, lock, type, search)
   static Future<bool> screenshot() => _flag('screenshot');
   static Future<bool> screenshotReady() => _flag('screenshotReady');
