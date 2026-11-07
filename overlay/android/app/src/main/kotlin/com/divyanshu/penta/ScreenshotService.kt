@@ -2,12 +2,13 @@ package com.divyanshu.penta
 
 import android.accessibilityservice.AccessibilityService
 import android.content.Intent
+import android.graphics.Rect
 import android.os.Build
 import android.os.Bundle
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 
-/** Screenshot, lock screen, and typing or searching in other apps, only when the user asks. */
+/** Screenshot, lock, scroll, tap, read, type and search in other apps, only when the user asks. */
 class ScreenshotService : AccessibilityService() {
 
     companion object {
@@ -82,6 +83,58 @@ class ScreenshotService : AccessibilityService() {
             hops++
         }
         return false
+    }
+
+    /** Taps the button or text whose label contains the given words. */
+    fun clickByText(text: String): Boolean {
+        val word = text.lowercase().trim()
+        if (word.isEmpty()) return false
+        val root = rootInActiveWindow ?: return false
+        val node = findByLabel(root, word) ?: return false
+        return clickNode(node)
+    }
+
+    private fun collectScrollable(node: AccessibilityNodeInfo?, list: MutableList<AccessibilityNodeInfo>) {
+        if (node == null) return
+        if (node.isScrollable && node.isVisibleToUser) list.add(node)
+        for (i in 0 until node.childCount) collectScrollable(node.getChild(i), list)
+    }
+
+    /** Scrolls the biggest scrollable area on the screen. */
+    fun scroll(forward: Boolean): Boolean {
+        val root = rootInActiveWindow ?: return false
+        val list = mutableListOf<AccessibilityNodeInfo>()
+        collectScrollable(root, list)
+        if (list.isEmpty()) return false
+        val rect = Rect()
+        val best = list.maxByOrNull { n ->
+            n.getBoundsInScreen(rect)
+            rect.width() * rect.height()
+        } ?: return false
+        val action = if (forward) AccessibilityNodeInfo.ACTION_SCROLL_FORWARD else AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD
+        return best.performAction(action)
+    }
+
+    private fun collect(node: AccessibilityNodeInfo?, out: StringBuilder) {
+        if (node == null || out.length > 3000) return
+        if (node.isPassword) return
+        if (node.isVisibleToUser) {
+            val t = node.text?.toString()
+            val d = node.contentDescription?.toString()
+            val piece = if (!t.isNullOrBlank()) t else d
+            if (!piece.isNullOrBlank()) {
+                out.append(piece.trim()).append(". ")
+            }
+        }
+        for (i in 0 until node.childCount) collect(node.getChild(i), out)
+    }
+
+    /** All visible text on screen (password fields are skipped). */
+    fun screenText(): String {
+        val root = rootInActiveWindow ?: return ""
+        val out = StringBuilder()
+        collect(root, out)
+        return out.toString().trim()
     }
 
     /** Makes sure a text box is focused, by tapping the app's search icon or box if needed. */
