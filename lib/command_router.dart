@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'ai_client.dart';
 import 'assistant_brain.dart';
@@ -5,6 +6,7 @@ import 'env.dart';
 import 'music_player.dart';
 import 'native_bridge.dart';
 import 'permission_helper.dart';
+import 'screens/camera_assist_screen.dart';
 
 /// Decides what a sentence means: device action, contacts, music, image, or AI chat.
 class CommandRouter {
@@ -13,8 +15,24 @@ class CommandRouter {
 
   bool _is(String text, String pattern) => RegExp(pattern).hasMatch(text);
 
+  /// Lowercases and fixes common speech-to-text spellings (you tube becomes youtube).
+  String _normalize(String s) {
+    String t = s.toLowerCase().replaceAll('.', '').trim();
+    t = t.replaceAll(RegExp(r'\byou tube\b'), 'youtube');
+    t = t.replaceAll(RegExp(r"\b(?:whats app|what's app|watsapp)\b"), 'whatsapp');
+    t = t.replaceAll(RegExp(r'\binsta gram\b'), 'instagram');
+    t = t.replaceAll(RegExp(r'\binsta\b'), 'instagram');
+    t = t.replaceAll(RegExp(r'\bface book\b'), 'facebook');
+    t = t.replaceAll(RegExp(r'\bg mail\b'), 'gmail');
+    return t;
+  }
+
   Future<String> route(String raw) async {
-    final String t = raw.replaceAll('.', '').trim();
+    // Removes a leading "Penta" or "Hey Penta" so the real command is matched.
+    final String stripped = raw
+        .replaceFirst(RegExp(r'^\s*(?:hey |hi |hello |ok |okay )?penta\s*,?\s+', caseSensitive: false), '')
+        .trim();
+    final String t = _normalize(stripped);
     RegExpMatch? m;
 
     // WhatsApp message
@@ -31,15 +49,27 @@ class CommandRouter {
     m ??= RegExp(r'^(.+?)\s+ko\s+(?:call|phone)(?:\s+(?:karo|kar do))?$').firstMatch(t);
     if (m != null) return _call(m.group(1)!.trim());
 
+    // Camera assistant (live camera: ask questions or take a photo)
+    if (_is(t, r'camera (assist|assistant|ai|vision)|(assist|assistant|ai|vision) camera|look at this|what am i (holding|showing)|scan this')) {
+      return _openCameraAssist();
+    }
+
     // Lock screen / screen off
     if (_is(t, r'\block (the )?(screen|phone|mobile)\b|screen (off|lock)|turn off (the )?screen|screen band|phone lock|lock karo')) {
       return _lockScreen();
     }
 
     // Type into the app that is open
-    final RegExpMatch? typing = RegExp(r'^type\s+(.+)$', caseSensitive: false).firstMatch(raw.trim());
+    final RegExpMatch? typing = RegExp(r'^type\s+(.+)$', caseSensitive: false).firstMatch(stripped);
     if (typing != null) return _type(typing.group(1)!.trim());
     if (_is(t, r'^(press enter|hit enter|press search|submit|search it)$')) return _pressSearch();
+
+    // Open an app and search in one sentence: "open youtube and search funny video"
+    m = RegExp(r'^(?:open|launch|start)\s+(.+?)\s+(?:and|then|aur)\s+(?:search|find|look up)(?:\s+for)?\s+(.+)$')
+        .firstMatch(t);
+    m ??= RegExp(r'^(.+?)\s+(?:kholo|khol do|open karo)\s+(?:aur|and)\s+(.+?)\s+(?:search|dhundho|khojo)(?:\s+karo)?$')
+        .firstMatch(t);
+    if (m != null) return _searchInApp(m.group(1)!.trim(), m.group(2)!.trim());
 
     // Search inside an app
     m = RegExp(r'^(?:search|find|look up)\s+(?:for\s+)?(.+?)\s+(?:on|in)\s+(.+)$').firstMatch(t);
@@ -179,10 +209,17 @@ class CommandRouter {
         ? brain.entries.sublist(0, brain.entries.length - 1)
         : <dynamic>[];
     try {
-      return await AiClient.chat(raw, history.cast());
+      return await AiClient.chat(stripped, history.cast());
     } catch (_) {
       return 'Sorry, I could not reach the AI service.';
     }
+  }
+
+  Future<String> _openCameraAssist() async {
+    final NavigatorState? nav = rootNav.currentState;
+    if (nav == null) return 'I could not open the camera assistant.';
+    nav.push(MaterialPageRoute<void>(builder: (BuildContext c) => CameraAssistScreen(brain: brain)));
+    return 'Camera assistant is open. Show me something and ask a question, or say take a photo.';
   }
 
   Future<String> _needAccessibility(String what) async {
