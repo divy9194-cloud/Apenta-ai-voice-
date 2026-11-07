@@ -1,4 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="accessibility_desc">Lets Penta take a screenshot when you ask. Penta does not read your screen.</string>
+    <string name="accessibility_desc">Lets Penta take a screenshot, lock the screen, and type or search in other apps when you ask. Penta reads the screen only to find the text box or button you asked for.</string>
 </resources>
