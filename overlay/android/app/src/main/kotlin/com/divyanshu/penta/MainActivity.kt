@@ -49,6 +49,7 @@ class MainActivity : FlutterActivity() {
                     when (call.method) {
                         "typeText" -> typeText(call.argument<String>("text") ?: "", result)
                         "pressSearch" -> pressSearch(result)
+                        "saveToGallery" -> result.success(saveToGallery(call.argument<String>("path") ?: ""))
                         "searchInOpenApp" -> searchInOpenApp(call.argument<String>("query") ?: "", result)
                         else -> result.success(handle(call))
                     }
@@ -107,6 +108,19 @@ class MainActivity : FlutterActivity() {
                 }, 500)
             }, 800)
         }, 1800)
+    }
+
+    // Copies a photo taken in the camera assistant into the phone Gallery.
+    private fun saveToGallery(path: String): Boolean {
+        return try {
+            @Suppress("DEPRECATION")
+            val url = MediaStore.Images.Media.insertImage(
+                contentResolver, path, "Penta ${System.currentTimeMillis()}", "Photo taken with Penta"
+            )
+            url != null
+        } catch (e: Exception) {
+            false
+        }
     }
 
     private fun launch(intent: Intent): Boolean {
