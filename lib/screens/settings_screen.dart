@@ -31,6 +31,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
             title: Text(user?.displayName ?? 'Penta user'),
             subtitle: Text(user?.email ?? ''),
           ),
+          ListTile(
+            leading: const Icon(Icons.home_filled),
+            title: const Text('Set Penta as default assistant'),
+            subtitle: const Text(
+                'Then a long press on Home opens Penta, like Gemini. Choose "Digital assistant app" and pick Penta.'),
+            onTap: () {
+              Device.openAssistantSettings();
+            },
+          ),
           SwitchListTile(
             secondary: const Icon(Icons.repeat),
             title: const Text('Continuous listening'),
