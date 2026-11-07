@@ -16,9 +16,53 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  Future<void> _editName() async {
+    final TextEditingController c = TextEditingController(text: widget.brain.callName);
+    final String? name = await showDialog<String>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: const Text('What should Penta call you?'),
+          content: TextField(controller: c, autofocus: true),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
+            FilledButton(onPressed: () => Navigator.pop(dialogContext, c.text), child: const Text('Save')),
+          ],
+        );
+      },
+    );
+    if (name != null) {
+      await widget.brain.setSetting('callName', name);
+      if (mounted) setState(() {});
+    }
+  }
+
+  Future<void> _editIdle() async {
+    final int? secs = await showDialog<int>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return SimpleDialog(
+          title: const Text('Wait for how long?'),
+          children: [
+            for (final int s in <int>[10, 20, 30, 60])
+              SimpleDialogOption(
+                onPressed: () => Navigator.pop(dialogContext, s),
+                child: Text('$s seconds'),
+              ),
+          ],
+        );
+      },
+    );
+    if (secs != null) {
+      await widget.brain.setSetting('idleSeconds', secs);
+      if (mounted) setState(() {});
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final User? user = FirebaseAuth.instance.currentUser;
+    final AssistantBrain brain = widget.brain;
     return SafeArea(
       child: ListView(
         children: [
@@ -32,6 +76,94 @@ class _SettingsScreenState extends State<SettingsScreen> {
             subtitle: Text(user?.email ?? ''),
           ),
           ListTile(
+            leading: const Icon(Icons.badge),
+            title: const Text('What Penta calls you'),
+            subtitle: Text(brain.callName),
+            onTap: _editName,
+          ),
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: Text('Conversation', style: TextStyle(color: neonCyan, fontWeight: FontWeight.w600)),
+          ),
+          SwitchListTile(
+            secondary: const Icon(Icons.forum),
+            title: const Text('Stay in conversation'),
+            subtitle: const Text('Keeps listening after each answer, so you can talk without tapping again.'),
+            value: brain.conversation,
+            onChanged: (bool on) async {
+              await brain.setSetting('conversation', on);
+              setState(() {});
+            },
+          ),
+          SwitchListTile(
+            secondary: const Icon(Icons.bedtime),
+            title: const Text('Sleep if I ignore Penta'),
+            subtitle: const Text(
+                'If you go quiet, Penta says "baat to kar na", and after a little more silence says goodbye, sleeps and closes its screen.'),
+            value: brain.autoSleep,
+            onChanged: (bool on) async {
+              await brain.setSetting('autoSleep', on);
+              setState(() {});
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.timer),
+            title: const Text('How long before the first nudge'),
+            subtitle: Text('${brain.idleSeconds} seconds'),
+            onTap: _editIdle,
+          ),
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: Text('Sounds', style: TextStyle(color: neonCyan, fontWeight: FontWeight.w600)),
+          ),
+          SwitchListTile(
+            secondary: const Icon(Icons.volume_off),
+            title: const Text('Silence the mic sound'),
+            subtitle: const Text(
+                'Mutes notification and system sounds while the mic is open, and restores them after. Notification sounds are silent while Penta listens.'),
+            value: brain.silenceBeeps,
+            onChanged: (bool on) async {
+              await brain.setSetting('silenceBeeps', on);
+              setState(() {});
+            },
+          ),
+          SwitchListTile(
+            secondary: const Icon(Icons.music_off),
+            title: const Text('Also mute media while listening'),
+            subtitle: const Text('Turn this on only if your phone still dings. Music and videos go silent while the mic is open.'),
+            value: brain.muteMedia,
+            onChanged: (bool on) async {
+              await brain.setSetting('muteMedia', on);
+              setState(() {});
+            },
+          ),
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: Text('Always on', style: TextStyle(color: neonCyan, fontWeight: FontWeight.w600)),
+          ),
+          SwitchListTile(
+            secondary: const Icon(Icons.mic),
+            title: const Text('"Hey Penta" background mode'),
+            subtitle: const Text(
+                'Keeps listening for the wake phrase, also after screen lock, with a visible notification. Needed for hands-free control of other apps.'),
+            value: brain.background,
+            onChanged: (bool on) async {
+              final String? error = await brain.setBackground(on);
+              if (error != null && context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
+              }
+              setState(() {});
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.battery_saver),
+            title: const Text('Keep Penta alive (battery)'),
+            subtitle: const Text('Set Penta to "Not optimised" or "Unrestricted" so Android does not stop it.'),
+            onTap: () {
+              Device.openBatterySettings();
+            },
+          ),
+          ListTile(
             leading: const Icon(Icons.home_filled),
             title: const Text('Set Penta as default assistant'),
             subtitle: const Text(
@@ -40,38 +172,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
               Device.openAssistantSettings();
             },
           ),
-          SwitchListTile(
-            secondary: const Icon(Icons.repeat),
-            title: const Text('Continuous listening'),
-            subtitle: const Text(
-                'Keeps the mic open for many commands in a row. Android plays a "ding" each time the mic restarts, so this is off by default.'),
-            value: widget.brain.continuous,
-            onChanged: (bool on) async {
-              await widget.brain.setContinuous(on);
-              setState(() {});
-            },
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: Text('Phone control and privacy', style: TextStyle(color: neonCyan, fontWeight: FontWeight.w600)),
           ),
-          SwitchListTile(
-            secondary: const Icon(Icons.mic),
-            title: const Text('"Hey Penta" background mode'),
-            subtitle: const Text(
-                'Keeps listening for the wake phrase, also after screen lock, with a visible notification. Off by default. This will ding often.'),
-            value: widget.brain.background,
-            onChanged: (bool on) async {
-              final String? error = await widget.brain.setBackground(on);
-              if (error != null && context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
-              }
-              setState(() {});
-            },
-          ),
-          SwitchListTile(
-            secondary: const Icon(Icons.cloud_sync),
-            title: const Text('Sync chat history to cloud'),
-            value: LocalStore.flag('sync'),
-            onChanged: (bool on) async {
-              await LocalStore.setFlag('sync', on);
-              setState(() {});
+          ListTile(
+            leading: const Icon(Icons.accessibility_new),
+            title: const Text('Allow Accessibility (full phone control)'),
+            subtitle: const Text('Needed for lock, scroll, tap, type, read screen, home, back and screenshots.'),
+            onTap: () {
+              Device.askScreenshotAccess();
             },
           ),
           ListTile(
@@ -81,11 +191,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
               Device.askWriteSettings();
             },
           ),
-          ListTile(
-            leading: const Icon(Icons.screenshot),
-            title: const Text('Allow Accessibility (screenshot, lock, type)'),
-            onTap: () {
-              Device.askScreenshotAccess();
+          SwitchListTile(
+            secondary: const Icon(Icons.cloud_sync),
+            title: const Text('Sync chat history to cloud'),
+            value: LocalStore.flag('sync'),
+            onChanged: (bool on) async {
+              await LocalStore.setFlag('sync', on);
+              setState(() {});
             },
           ),
           ListTile(
