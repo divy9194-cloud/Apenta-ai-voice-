@@ -54,7 +54,8 @@ class Device {
 
   static Future<bool> dial(String number) => _flag('dial', {'number': number});
   static Future<bool> alarm(int hour, int minute) => _flag('alarm', {'hour': hour, 'minute': minute});
-  static Future<bool> timer(int seconds) => _flag('timer', {'seconds': seconds});
+  static Future<bool> timer(int seconds, [String message = 'Penta timer']) =>
+      _flag('timer', {'seconds': seconds, 'message': message});
   static Future<bool> settingsPage(String page) => _flag('settingsPage', {'page': page});
 
   static Future<int> battery() async {
@@ -70,7 +71,23 @@ class Device {
   /// Copies a saved photo into the phone Gallery.
   static Future<bool> saveToGallery(String path) => _flag('saveToGallery', {'path': path});
 
-  // Accessibility features (screenshot, lock, type, search)
+  // Volume (music stream). action: up, down, mute, unmute, set. Returns the volume percent.
+  static Future<int> volume(String action, [int percent = 0]) async {
+    final dynamic r = await _call('volume', {'action': action, 'percent': percent});
+    return r is int ? r : -1;
+  }
+
+  // Hides the mic "ding" by muting notification and system sounds (and media if asked).
+  static Future<bool> muteBeeps(bool on, bool media) => _flag('muteBeeps', {'on': on, 'media': media});
+
+  // Moves Penta out of the way (back to the previous app or the home screen).
+  static Future<bool> closeApp() => _flag('closeApp');
+
+  static Future<void> openBatterySettings() async {
+    await _call('openBatterySettings');
+  }
+
+  // Accessibility features (screenshot, lock, type, search, phone control)
   static Future<bool> screenshot() => _flag('screenshot');
   static Future<bool> screenshotReady() => _flag('screenshotReady');
   static Future<void> askScreenshotAccess() async {
@@ -78,6 +95,15 @@ class Device {
   }
 
   static Future<bool> lockScreen() => _flag('lockScreen');
+
+  /// name: home, back, recents, notifications, quick, power
+  static Future<bool> globalAction(String name) => _flag('globalAction', {'name': name});
+
+  static Future<bool> scroll(bool forward) => _flag('scroll', {'forward': forward});
+  static Future<bool> tapText(String text) => _flag('tapText', {'text': text});
+
+  /// Text visible on the screen of the app behind Penta (password fields are skipped).
+  static Future<String> readScreen() => _status('readScreen');
 
   /// Returns: ok, no_service, no_field
   static Future<String> typeText(String text) => _status('typeText', {'text': text});
