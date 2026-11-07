@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'env.dart';
@@ -18,68 +19,83 @@ class AiClient {
 
   static String _short(String s) => s.length > 160 ? s.substring(0, 160) : s;
 
+  /// Reads the text out of a Gemini reply. Returns null when there is no text.
+  static String? _readAnswer(String body) {
+    final Map<String, dynamic> data = jsonDecode(body) as Map<String, dynamic>;
+    final List<dynamic>? candidates = data['candidates'] as List<dynamic>?;
+    if (candidates == null || candidates.isEmpty) return null;
+    final Map<dynamic, dynamic> first = candidates.first as Map;
+    final Map<dynamic, dynamic>? content = first['content'] as Map?;
+    final List<dynamic> parts = (content?['parts'] as List<dynamic>?) ?? <dynamic>[];
+    final StringBuffer out = StringBuffer();
+    for (final dynamic p in parts) {
+      final Map<dynamic, dynamic> part = p as Map;
+      if (part['thought'] == true) continue;
+      final dynamic t = part['text'];
+      if (t is String) out.write(t);
+    }
+    final String answer = out.toString().trim();
+    return answer.isEmpty ? null : answer;
+  }
+
   static Future<String> chat(String prompt, List<ChatEntry> history) async {
     if (AppEnv.geminiKey.isEmpty) return 'The Gemini API key is not configured.';
-    try {
-      final List<ChatEntry> recent =
-          List<ChatEntry>.from(history.length > 10 ? history.sublist(history.length - 10) : history);
-      while (recent.isNotEmpty && !recent.first.fromUser) {
-        recent.removeAt(0);
-      }
-      final List<Map<String, dynamic>> contents = <Map<String, dynamic>>[];
-      for (final ChatEntry e in recent) {
-        contents.add({
-          'role': e.fromUser ? 'user' : 'model',
-          'parts': [
-            {'text': e.text}
-          ],
-        });
-      }
+    final List<ChatEntry> recent =
+        List<ChatEntry>.from(history.length > 10 ? history.sublist(history.length - 10) : history);
+    while (recent.isNotEmpty && !recent.first.fromUser) {
+      recent.removeAt(0);
+    }
+    final List<Map<String, dynamic>> contents = <Map<String, dynamic>>[];
+    for (final ChatEntry e in recent) {
       contents.add({
-        'role': 'user',
+        'role': e.fromUser ? 'user' : 'model',
         'parts': [
-          {'text': prompt}
+          {'text': e.text}
         ],
       });
-      final http.Response res = await http
-          .post(
-            Uri.parse('$_base/${AppEnv.chatModel}:generateContent'),
-            headers: _headers,
-            body: jsonEncode({
-              'systemInstruction': {
-                'parts': [
-                  {'text': _persona}
-                ]
-              },
-              'contents': contents,
-            }),
-          )
-          .timeout(const Duration(seconds: 60));
-      if (res.statusCode != 200) {
-        final String body = utf8.decode(res.bodyBytes);
-        return 'The AI service returned error ${res.statusCode}. ${_short(body)}';
-      }
-      final Map<String, dynamic> data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
-      final List<dynamic>? candidates = data['candidates'] as List<dynamic>?;
-      if (candidates == null || candidates.isEmpty) {
-        return 'The AI gave no answer. It may have been blocked, so try asking differently.';
-      }
-      final Map<dynamic, dynamic> first = candidates.first as Map;
-      final Map<dynamic, dynamic>? content = first['content'] as Map?;
-      final List<dynamic> parts = (content?['parts'] as List<dynamic>?) ?? <dynamic>[];
-      final StringBuffer out = StringBuffer();
-      for (final dynamic p in parts) {
-        final Map<dynamic, dynamic> part = p as Map;
-        if (part['thought'] == true) continue;
-        final dynamic t = part['text'];
-        if (t is String) out.write(t);
-      }
-      final String answer = out.toString().trim();
-      if (answer.isEmpty) return 'The AI returned an empty answer. Please try again.';
-      return answer;
-    } catch (e) {
-      return 'AI error: ${_short(e.toString())}';
     }
+    contents.add({
+      'role': 'user',
+      'parts': [
+        {'text': prompt}
+      ],
+    });
+    final String payload = jsonEncode({
+      'systemInstruction': {
+        'parts': [
+          {'text': _persona}
+        ]
+      },
+      'contents': contents,
+    });
+
+    // Tries the main model first, then faster backups if it is slow or missing.
+    final List<String> models = <String>[AppEnv.chatModel, 'gemini-flash-lite-latest', 'gemini-3.6-flash'];
+    final List<String> tried = <String>[];
+    String lastProblem = 'no model answered';
+    for (final String model in models) {
+      if (tried.contains(model)) continue;
+      tried.add(model);
+      try {
+        final http.Response res = await http
+            .post(Uri.parse('$_base/$model:generateContent'), headers: _headers, body: payload)
+            .timeout(const Duration(seconds: 20));
+        final String body = utf8.decode(res.bodyBytes);
+        if (res.statusCode == 200) {
+          final String? answer = _readAnswer(body);
+          if (answer != null) return answer;
+          lastProblem = '$model gave an empty answer';
+          continue;
+        }
+        lastProblem = '$model error ${res.statusCode}: ${_short(body)}';
+        if (res.statusCode == 400 || res.statusCode == 401 || res.statusCode == 403) break;
+      } on TimeoutException {
+        lastProblem = '$model took too long';
+      } catch (e) {
+        lastProblem = '$model: ${_short(e.toString())}';
+      }
+    }
+    return 'AI problem: $lastProblem';
   }
 
   /// Returns the saved image file path.
