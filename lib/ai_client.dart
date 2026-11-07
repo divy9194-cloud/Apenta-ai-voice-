@@ -4,7 +4,7 @@ import 'package:http/http.dart' as http;
 import 'env.dart';
 import 'local_store.dart';
 
-/// Google Gemini: text answers and image generation.
+/// Google Gemini for text, with image generation that falls back to a free service.
 class AiClient {
   static const String _base = 'https://generativelanguage.googleapis.com/v1beta/models';
   static const String _persona =
@@ -69,7 +69,6 @@ class AiClient {
       'contents': contents,
     });
 
-    // Tries the main model first, then faster backups if it is slow or missing.
     final List<String> models = <String>[AppEnv.chatModel, 'gemini-flash-lite-latest', 'gemini-3.6-flash'];
     final List<String> tried = <String>[];
     String lastProblem = 'no model answered';
@@ -98,12 +97,40 @@ class AiClient {
     return 'AI problem: $lastProblem';
   }
 
-  /// Returns the saved image file path.
+  /// Returns the saved image file path. Tries Google first, then a free service.
   static Future<String> image(String prompt) async {
-    if (AppEnv.geminiKey.isEmpty) throw Exception('Gemini API key is not configured.');
+    final List<String> problems = <String>[];
+    if (AppEnv.geminiKey.isNotEmpty) {
+      final List<String> models = <String>[AppEnv.imageModel, 'gemini-3.1-flash-lite-image'];
+      final List<String> tried = <String>[];
+      for (final String model in models) {
+        if (tried.contains(model)) continue;
+        tried.add(model);
+        try {
+          final String? path = await _geminiImage(model, prompt);
+          if (path != null) return path;
+          problems.add('$model returned no image');
+        } on TimeoutException {
+          problems.add('$model took too long');
+        } catch (e) {
+          problems.add('$model ${_short(e.toString().replaceFirst('Exception: ', ''))}');
+        }
+      }
+    }
+    try {
+      return await _freeImage(prompt);
+    } on TimeoutException {
+      problems.add('free image service took too long');
+    } catch (e) {
+      problems.add('free image service ${_short(e.toString().replaceFirst('Exception: ', ''))}');
+    }
+    throw Exception(problems.join(' | '));
+  }
+
+  static Future<String?> _geminiImage(String model, String prompt) async {
     final http.Response res = await http
         .post(
-          Uri.parse('$_base/${AppEnv.imageModel}:generateContent'),
+          Uri.parse('$_base/$model:generateContent'),
           headers: _headers,
           body: jsonEncode({
             'contents': [
@@ -118,11 +145,15 @@ class AiClient {
             },
           }),
         )
-        .timeout(const Duration(seconds: 90));
-    if (res.statusCode != 200) throw Exception('Image API error ${res.statusCode}');
+        .timeout(const Duration(seconds: 45));
+    if (res.statusCode == 429) throw Exception('error 429 (image generation needs a paid Google plan)');
+    if (res.statusCode != 200) throw Exception('error ${res.statusCode}');
     final Map<String, dynamic> data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
-    final List<dynamic> parts =
-        (((data['candidates'] as List<dynamic>).first as Map)['content'] as Map)['parts'] as List<dynamic>;
+    final List<dynamic>? candidates = data['candidates'] as List<dynamic>?;
+    if (candidates == null || candidates.isEmpty) return null;
+    final Map<dynamic, dynamic> first = candidates.first as Map;
+    final Map<dynamic, dynamic>? content = first['content'] as Map?;
+    final List<dynamic> parts = (content?['parts'] as List<dynamic>?) ?? <dynamic>[];
     for (final dynamic part in parts) {
       final Map<dynamic, dynamic> map = part as Map;
       final dynamic inline = map['inlineData'] ?? map['inline_data'];
@@ -131,6 +162,21 @@ class AiClient {
         return LocalStore.saveImage(base64Decode(b64));
       }
     }
-    throw Exception('No image returned');
+    return null;
+  }
+
+  static Future<String> _freeImage(String prompt) async {
+    final String clean = prompt.replaceAll('/', ' ').trim();
+    final Uri url = Uri.https('image.pollinations.ai', '/prompt/$clean', {
+      'width': '768',
+      'height': '768',
+      'nologo': 'true',
+    });
+    final http.Response res = await http.get(url).timeout(const Duration(seconds: 90));
+    final String type = res.headers['content-type'] ?? '';
+    if (res.statusCode != 200 || !type.startsWith('image/')) {
+      throw Exception('error ${res.statusCode}');
+    }
+    return LocalStore.saveImage(res.bodyBytes);
   }
 }
