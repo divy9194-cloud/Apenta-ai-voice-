@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../assistant_brain.dart';
+import '../widgets/boy_avatar.dart';
 import '../widgets/common.dart';
-import '../widgets/penta_orb.dart';
 import '../widgets/wave_bars.dart';
 import 'camera_assist_screen.dart';
 
@@ -18,8 +18,10 @@ class HomeScreen extends StatelessWidget {
         if (brain.entries.isNotEmpty && !brain.entries.last.fromUser) {
           lastReply = brain.entries.last.text;
         }
-        String status = 'Tap Penta to talk';
-        if (brain.active) {
+        String status = 'Tap me to talk';
+        if (brain.sleeping) {
+          status = 'Zzz… tap me to wake me up';
+        } else if (brain.active) {
           status = 'Listening…';
         } else if (brain.background) {
           status = 'Say "Hey Penta"';
@@ -56,7 +58,14 @@ class HomeScreen extends StatelessWidget {
               ),
               Expanded(
                 child: Center(
-                  child: PentaOrb(listening: brain.active, level: brain.level, onTap: brain.toggle),
+                  child: FittedBox(
+                    fit: BoxFit.contain,
+                    child: SizedBox(
+                      width: 280,
+                      height: 320,
+                      child: BoyAvatar(mood: brain.mood, level: brain.level, onTap: brain.toggle),
+                    ),
+                  ),
                 ),
               ),
               WaveBars(level: brain.level, active: brain.active),
