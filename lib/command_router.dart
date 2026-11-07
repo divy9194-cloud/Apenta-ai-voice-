@@ -31,6 +31,24 @@ class CommandRouter {
     m ??= RegExp(r'^(.+?)\s+ko\s+(?:call|phone)(?:\s+(?:karo|kar do))?$').firstMatch(t);
     if (m != null) return _call(m.group(1)!.trim());
 
+    // Lock screen / screen off
+    if (_is(t, r'\block (the )?(screen|phone|mobile)\b|screen (off|lock)|turn off (the )?screen|screen band|phone lock|lock karo')) {
+      return _lockScreen();
+    }
+
+    // Type into the app that is open
+    final RegExpMatch? typing = RegExp(r'^type\s+(.+)$', caseSensitive: false).firstMatch(raw.trim());
+    if (typing != null) return _type(typing.group(1)!.trim());
+    if (_is(t, r'^(press enter|hit enter|press search|submit|search it)$')) return _pressSearch();
+
+    // Search inside an app
+    m = RegExp(r'^(?:search|find|look up)\s+(?:for\s+)?(.+?)\s+(?:on|in)\s+(.+)$').firstMatch(t);
+    if (m != null) return _searchInApp(m.group(2)!.trim(), m.group(1)!.trim());
+    m = RegExp(r'^(.+?)\s+(?:par|pe)\s+(.+?)\s+(?:search|dhundho|khojo)(?:\s+karo)?$').firstMatch(t);
+    if (m != null) return _searchInApp(m.group(1)!.trim(), m.group(2)!.trim());
+    m = RegExp(r'^(?:search|google)\s+(?:for\s+)?(.+)$').firstMatch(t);
+    if (m != null) return _searchInApp('google', m.group(1)!.trim());
+
     // Image generation
     m = RegExp(r'(?:generate|create|make|draw)\s+(?:me\s+)?(?:an?\s+)?(?:image|picture|photo|pic)\s*(?:of|for)?\s*(.+)')
         .firstMatch(t);
@@ -39,7 +57,7 @@ class CommandRouter {
         await AiClient.image(m.group(1)!);
         brain.refresh();
         return 'Your image is ready. You can see it in the Images tab.';
-            } catch (e) {
+      } catch (e) {
         return 'Image problem: ${e.toString().replaceFirst('Exception: ', '')}';
       }
     }
@@ -165,6 +183,83 @@ class CommandRouter {
     } catch (_) {
       return 'Sorry, I could not reach the AI service.';
     }
+  }
+
+  Future<String> _needAccessibility(String what) async {
+    await Device.askScreenshotAccess();
+    return 'Please enable Penta under Accessibility so I can $what, then ask again.';
+  }
+
+  Future<String> _lockScreen() async {
+    if (!await Device.screenshotReady()) return _needAccessibility('lock the screen');
+    final bool ok = await Device.lockScreen();
+    return ok ? 'Locking the screen.' : 'I could not lock the screen. This needs Android 9 or newer.';
+  }
+
+  Future<String> _type(String text) async {
+    final String status = await Device.typeText(text);
+    if (status == 'ok') return 'Typed.';
+    if (status == 'no_service') return _needAccessibility('type');
+    return 'I could not find a text box. Tap a text box in the app first, then say type and your text.';
+  }
+
+  Future<String> _pressSearch() async {
+    final String status = await Device.pressSearch();
+    if (status == 'ok') return 'Done.';
+    if (status == 'no_service') return _needAccessibility('press search');
+    return 'I could not find a search button.';
+  }
+
+  /// Web address that opens an app's search results directly, or null for other apps.
+  String? _deepLink(String app, String query) {
+    final String q = Uri.encodeQueryComponent(query);
+    switch (app) {
+      case 'youtube':
+        return 'https://www.youtube.com/results?search_query=$q';
+      case 'google':
+      case 'chrome':
+      case 'web':
+      case 'browser':
+        return 'https://www.google.com/search?q=$q';
+      case 'maps':
+      case 'google maps':
+        return 'https://www.google.com/maps/search/?api=1&query=$q';
+      case 'play store':
+      case 'playstore':
+      case 'google play':
+        return 'https://play.google.com/store/search?q=$q&c=apps';
+      case 'spotify':
+        return 'spotify:search:${Uri.encodeComponent(query)}';
+      case 'amazon':
+        return 'https://www.amazon.in/s?k=$q';
+      case 'flipkart':
+        return 'https://www.flipkart.com/search?q=$q';
+      case 'wikipedia':
+        return 'https://en.wikipedia.org/w/index.php?search=$q';
+      case 'facebook':
+        return 'https://www.facebook.com/search/top?q=$q';
+      case 'twitter':
+      case 'x':
+        return 'https://x.com/search?q=$q';
+      default:
+        return null;
+    }
+  }
+
+  Future<String> _searchInApp(String appRaw, String query) async {
+    final String app = appRaw.replaceAll(RegExp(r'\b(the|app|application)\b'), '').trim();
+    final String? link = _deepLink(app, query);
+    if (link != null) {
+      final bool ok = await Device.openUrl(link);
+      return ok ? 'Searching $query on $app.' : 'I could not open $app.';
+    }
+    // Any other app: open it, then use its own search box.
+    if (!await Device.screenshotReady()) return _needAccessibility('search inside $app');
+    if (!await Device.openApp(app)) return 'Penta could not find that app.';
+    final String status = await Device.searchInOpenApp(query);
+    if (status == 'ok') return 'Searching $query in $app.';
+    if (status == 'no_search_box') return 'I opened $app but could not find its search box.';
+    return 'I could not type in the $app search box.';
   }
 
   Future<String> _openApp(String raw) async {
