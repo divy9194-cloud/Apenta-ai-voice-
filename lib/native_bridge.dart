@@ -67,6 +67,13 @@ class Device {
     await _call('askScreenshotAccess');
   }
 
+  /// True once after Penta was opened with a long press on Home.
+  static Future<bool> consumeAssistLaunch() => _flag('consumeAssistLaunch');
+
+  static Future<void> openAssistantSettings() async {
+    await _call('openAssistantSettings');
+  }
+
   static Future<void> startListenService() async {
     await _call('startListen');
   }
