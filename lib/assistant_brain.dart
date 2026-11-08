@@ -43,6 +43,7 @@ class AssistantBrain extends ChangeNotifier {
   bool sleeping = false;
   bool greeting = false;
   String liveText = '';
+  String spokenText = '';
   String lastEvent = '';
   double level = 0.0;
 
@@ -422,6 +423,7 @@ class AssistantBrain extends ChangeNotifier {
   }
 
   Future<void> speak(String text) async {
+    spokenText = text;
     _speaking = true;
     notifyListeners();
     try {
