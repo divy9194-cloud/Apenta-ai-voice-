@@ -18,6 +18,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Add character picture
+        run: |
+          mkdir -p assets
+          f=$(ls boy.jpg boy.png *.jpg *.jpeg *.png 2>/dev/null | head -n 1)
+          if [ -z "$f" ]; then
+            echo "No picture found. Upload the character picture (jpg) to the main folder of the repo."
+            exit 1
+          fi
+          echo "Using $f"
+          cp "$f" assets/boy.jpg
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
