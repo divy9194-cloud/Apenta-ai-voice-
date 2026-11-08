@@ -71,6 +71,10 @@ class Device {
   /// Copies a saved photo into the phone Gallery.
   static Future<bool> saveToGallery(String path) => _flag('saveToGallery', {'path': path});
 
+  /// Sends a picture file to another app, for example Canva. False if that app is not installed.
+  static Future<bool> shareImage(String path, String package) =>
+      _flag('shareImage', {'path': path, 'package': package});
+
   // Volume (music stream). action: up, down, mute, unmute, set. Returns the volume percent.
   static Future<int> volume(String action, [int percent = 0]) async {
     final dynamic r = await _call('volume', {'action': action, 'percent': percent});
