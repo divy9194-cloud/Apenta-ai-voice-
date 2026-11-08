@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../assistant_brain.dart';
@@ -8,6 +7,7 @@ import '../widgets/boy_avatar.dart';
 import '../widgets/character_view.dart';
 import '../widgets/common.dart';
 import 'camera_assist_screen.dart';
+import 'photo_editor_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key, required this.brain, required this.onOpenTab});
@@ -137,7 +137,7 @@ class _HomeScreenState extends State<HomeScreen> {
       child: GestureDetector(
         onTap: onTap,
         child: Container(
-          margin: const EdgeInsets.symmetric(horizontal: 4),
+          margin: const EdgeInsets.symmetric(horizontal: 3),
           padding: const EdgeInsets.symmetric(vertical: 10),
           decoration: BoxDecoration(
             color: const Color(0xFF11162A),
@@ -149,7 +149,7 @@ class _HomeScreenState extends State<HomeScreen> {
             children: [
               Icon(icon, size: 20, color: neonCyan),
               const SizedBox(height: 4),
-              Text(label, style: const TextStyle(fontSize: 12)),
+              Text(label, style: const TextStyle(fontSize: 11)),
             ],
           ),
         ),
@@ -192,11 +192,6 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (BuildContext context, Widget? child) {
         final BoyMood mood = brain.mood;
         final DateTime now = DateTime.now();
-        String lastReply = '';
-        if (brain.entries.isNotEmpty && !brain.entries.last.fromUser) {
-          lastReply = brain.entries.last.text;
-        }
-        final String caption = brain.liveText.isNotEmpty ? brain.liveText : lastReply;
         return Container(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
@@ -282,61 +277,35 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
 
-                // The character with his board
+                // The character
                 Expanded(
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(14, 6, 14, 4),
-                    child: LayoutBuilder(
-                      builder: (BuildContext context, BoxConstraints cs) {
-                        final double w = cs.maxWidth;
-                        final double h = math.min(cs.maxHeight, w * 0.95);
-                        return Center(
-                          child: SizedBox(
-                            width: w,
-                            height: h,
-                            child: Stack(
+                    padding: const EdgeInsets.fromLTRB(14, 6, 14, 6),
+                    child: Stack(
+                      children: [
+                        Positioned.fill(child: CharacterView(brain: brain)),
+                        Positioned(
+                          left: 12,
+                          top: 12,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: const Color(0xCC2A1B4D),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: neonViolet.withAlpha(120)),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
                               children: [
-                                Positioned.fill(child: CharacterView(brain: brain)),
-                                Positioned(
-                                  left: 10,
-                                  bottom: 10,
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xDD2A1B4D),
-                                      borderRadius: BorderRadius.circular(14),
-                                      border: Border.all(color: neonViolet.withAlpha(120)),
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        const Icon(Icons.auto_awesome, size: 13, color: Color(0xFFF472B6)),
-                                        const SizedBox(width: 5),
-                                        Text(_moodLabel(mood), style: const TextStyle(fontSize: 12)),
-                                      ],
-                                    ),
-                                  ),
-                                ),
+                                const Icon(Icons.auto_awesome, size: 13, color: Color(0xFFF472B6)),
+                                const SizedBox(width: 5),
+                                Text(_moodLabel(mood), style: const TextStyle(fontSize: 12)),
                               ],
                             ),
                           ),
-                        );
-                      },
+                        ),
+                      ],
                     ),
-                  ),
-                ),
-
-                // Full text of what Penta heard or said
-                Container(
-                  constraints: const BoxConstraints(minHeight: 40),
-                  padding: const EdgeInsets.fromLTRB(24, 2, 24, 4),
-                  alignment: Alignment.center,
-                  child: Text(
-                    caption,
-                    textAlign: TextAlign.center,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 14, color: brain.liveText.isNotEmpty ? Colors.white : Colors.white60),
                   ),
                 ),
                 if (brain.lastEvent.contains('error'))
@@ -368,6 +337,12 @@ class _HomeScreenState extends State<HomeScreen> {
                         Navigator.push(
                           context,
                           MaterialPageRoute<void>(builder: (BuildContext c) => CameraAssistScreen(brain: brain)),
+                        );
+                      }),
+                      _chip(Icons.auto_fix_high, 'Edit', () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute<void>(builder: (BuildContext c) => PhotoEditorScreen(brain: brain)),
                         );
                       }),
                     ],
