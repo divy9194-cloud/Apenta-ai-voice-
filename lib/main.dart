@@ -121,7 +121,10 @@ class _ShellState extends State<Shell> {
       body: IndexedStack(
         index: _tab,
         children: [
-          HomeScreen(brain: _brain),
+         HomeScreen(
+  brain: _brain,
+  onOpenTab: (int index) => setState(() => _tab = index),
+), 
           const AppsScreen(),
           ChatScreen(brain: _brain),
           ImagesScreen(brain: _brain),
