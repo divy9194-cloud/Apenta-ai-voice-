@@ -11,7 +11,7 @@ import '../native_bridge.dart';
 import '../permission_helper.dart';
 import '../widgets/common.dart';
 
-/// Pick a photo, say or type what to change, and Meta Muse Image edits it.
+/// Pick a photo, say or type what to change, and Gemini edits it.
 /// You can also send it to Canva, or make it Penta's picture.
 class PhotoEditorScreen extends StatefulWidget {
   const PhotoEditorScreen({super.key, required this.brain});
@@ -137,7 +137,7 @@ class _PhotoEditorScreenState extends State<PhotoEditorScreen> {
     if (text.isEmpty || _busy) return '';
     setState(() {
       _busy = true;
-      _note = 'Editing with Meta AI…';
+      _note = 'Editing with Gemini…';
     });
     String reply;
     try {
