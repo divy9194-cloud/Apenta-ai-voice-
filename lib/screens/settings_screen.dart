@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../assistant_brain.dart';
 import '../firebase_auth_service.dart';
+import '../floating.dart';
 import '../local_store.dart';
 import '../native_bridge.dart';
 import '../widgets/common.dart';
@@ -59,6 +60,63 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  Future<void> _pickVoice() async {
+    await showDialog<void>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return StatefulBuilder(
+          builder: (BuildContext context, void Function(void Function()) setInner) {
+            return AlertDialog(
+              title: const Text('Choose a voice'),
+              content: SizedBox(
+                width: double.maxFinite,
+                height: 380,
+                child: FutureBuilder<List<Map<String, String>>>(
+                  future: VoiceHub.voices(),
+                  builder: (BuildContext context, AsyncSnapshot<List<Map<String, String>>> snap) {
+                    if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+                    final List<Map<String, String>> list = snap.data!;
+                    if (list.isEmpty) {
+                      return const Center(child: Text('No voices found. Install more voices in your phone\'s Text-to-speech settings.'));
+                    }
+                    return ListView.builder(
+                      itemCount: list.length,
+                      itemBuilder: (BuildContext context, int i) {
+                        final Map<String, String> v = list[i];
+                        final bool chosen = VoiceHub.chosenFor(v) == v['name'];
+                        return ListTile(
+                          dense: true,
+                          title: Text(v['name']!, style: const TextStyle(fontSize: 13)),
+                          subtitle: Text(v['locale']!),
+                          trailing: chosen ? const Icon(Icons.check_circle, color: neonCyan) : const Icon(Icons.play_arrow),
+                          onTap: () async {
+                            await VoiceHub.choose(v);
+                            setInner(() {});
+                            await VoiceHub.preview(v);
+                          },
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () async {
+                    await VoiceHub.reset();
+                    setInner(() {});
+                  },
+                  child: const Text('Reset'),
+                ),
+                FilledButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Done')),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final User? user = FirebaseAuth.instance.currentUser;
@@ -81,6 +139,85 @@ class _SettingsScreenState extends State<SettingsScreen> {
             subtitle: Text(brain.callName),
             onTap: _editName,
           ),
+          ListTile(
+            leading: const Icon(Icons.face_retouching_natural),
+            title: const Text('Reset Penta\'s picture'),
+            subtitle: const Text('Go back to the original boy picture. Change it any time in the Photo editor.'),
+            onTap: () async {
+              await LocalStore.prefs.remove('avatarPath');
+              brain.refresh();
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Penta is back to the original picture.')));
+              }
+            },
+          ),
+
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: Text('Voice', style: TextStyle(color: neonCyan, fontWeight: FontWeight.w600)),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+            child: SegmentedButton<bool>(
+              segments: const [
+                ButtonSegment<bool>(value: true, label: Text('Boy voice'), icon: Icon(Icons.face)),
+                ButtonSegment<bool>(value: false, label: Text('Girl voice'), icon: Icon(Icons.face_3)),
+              ],
+              selected: <bool>{VoiceHub.boy},
+              onSelectionChanged: (Set<bool> s) async {
+                await VoiceHub.setBoy(s.first);
+                setState(() {});
+                await brain.speak(s.first ? 'Namaste, ab main aise bolunga.' : 'Namaste, ab main aise bolungi.');
+              },
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.record_voice_over),
+            title: const Text('Choose a specific voice'),
+            subtitle: const Text('Tap voices to hear them and keep the one that sounds male. Android does not tell which are male.'),
+            onTap: _pickVoice,
+          ),
+
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: Text('Floating Penta and screen share', style: TextStyle(color: neonCyan, fontWeight: FontWeight.w600)),
+          ),
+          SwitchListTile(
+            secondary: const Icon(Icons.picture_in_picture_alt),
+            title: const Text('Floating Penta box'),
+            subtitle: const Text(
+                'When you press Back or Home, a small Penta box stays over other apps and talks with you. Needs "Display over other apps".'),
+            value: FloatingHub.enabled,
+            onChanged: (bool on) async {
+              final String? error = await FloatingHub.setFloating(on);
+              if (error != null && context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
+              }
+              setState(() {});
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.layers),
+            title: const Text('Allow display over other apps'),
+            onTap: () {
+              Floating.askOverlayPermission();
+            },
+          ),
+          ListTile(
+            leading: Icon(FloatingHub.sharing ? Icons.stop_screen_share : Icons.screen_share, color: neonCyan),
+            title: Text(FloatingHub.sharing ? 'Stop sharing my screen' : 'Share my screen with Penta'),
+            subtitle: const Text('Penta looks at a picture of your screen only when you ask a question while sharing.'),
+            onTap: () async {
+              if (FloatingHub.sharing) {
+                await FloatingHub.stopShare();
+              } else {
+                await FloatingHub.startShare();
+              }
+              await Future<void>.delayed(const Duration(milliseconds: 600));
+              if (mounted) setState(() {});
+            },
+          ),
+
           const Padding(
             padding: EdgeInsets.fromLTRB(16, 12, 16, 0),
             child: Text('Conversation', style: TextStyle(color: neonCyan, fontWeight: FontWeight.w600)),
@@ -112,6 +249,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             subtitle: Text('${brain.idleSeconds} seconds'),
             onTap: _editIdle,
           ),
+
           const Padding(
             padding: EdgeInsets.fromLTRB(16, 12, 16, 0),
             child: Text('Sounds', style: TextStyle(color: neonCyan, fontWeight: FontWeight.w600)),
@@ -137,6 +275,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               setState(() {});
             },
           ),
+
           const Padding(
             padding: EdgeInsets.fromLTRB(16, 12, 16, 0),
             child: Text('Always on', style: TextStyle(color: neonCyan, fontWeight: FontWeight.w600)),
@@ -172,6 +311,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               Device.openAssistantSettings();
             },
           ),
+
           const Padding(
             padding: EdgeInsets.fromLTRB(16, 12, 16, 0),
             child: Text('Phone control and privacy', style: TextStyle(color: neonCyan, fontWeight: FontWeight.w600)),
