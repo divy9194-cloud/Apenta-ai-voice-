@@ -4,13 +4,13 @@ import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'env.dart';
 
-/// Sends a camera picture and a question to Gemini and returns a short answer.
+/// Sends a picture (camera or screen) and a question to Gemini and returns a short answer.
 class VisionClient {
   static const String _base = 'https://generativelanguage.googleapis.com/v1beta/models';
   static const String _persona =
-      'You are Penta, a voice assistant looking through the phone camera. Answer the question about the picture '
-      'in the language the user used (English, Hindi or Hinglish). Keep it short and easy to speak, under 60 words. '
-      'Do not use markdown.';
+      'You are Penta, a voice assistant looking at a picture from the user\'s phone (the camera or the screen). '
+      'Answer the question about the picture in the language the user used (English, Hindi or Hinglish). '
+      'Keep it short and easy to speak, under 60 words. Do not use markdown.';
 
   static String _short(String s) => s.length > 160 ? s.substring(0, 160) : s;
 
