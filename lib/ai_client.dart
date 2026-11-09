@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'env.dart';
 import 'local_store.dart';
@@ -123,6 +124,73 @@ class AiClient {
       problems.add('free image service took too long');
     } catch (e) {
       problems.add('free image service ${_short(e.toString().replaceFirst('Exception: ', ''))}');
+    }
+    throw Exception(problems.join(' | '));
+  }
+
+  /// Edits a photo using Gemini. Sends the picture plus the instruction and returns the new picture bytes.
+  static Future<Uint8List> editImage(Uint8List source, String instruction) async {
+    if (AppEnv.geminiKey.isEmpty) {
+      throw Exception('The Gemini API key is not configured.');
+    }
+    final bool png = source.length > 3 && source[0] == 0x89 && source[1] == 0x50;
+    final String mime = png ? 'image/png' : 'image/jpeg';
+    final String payload = jsonEncode({
+      'contents': [
+        {
+          'parts': [
+            {'text': instruction},
+            {
+              'inlineData': {'mimeType': mime, 'data': base64Encode(source)}
+            },
+          ]
+        }
+      ],
+      'generationConfig': {
+        'responseModalities': ['TEXT', 'IMAGE']
+      },
+    });
+
+    final List<String> models = <String>[AppEnv.imageModel, 'gemini-3.1-flash-lite-image'];
+    final List<String> tried = <String>[];
+    final List<String> problems = <String>[];
+    for (final String model in models) {
+      if (tried.contains(model)) continue;
+      tried.add(model);
+      try {
+        final http.Response res = await http
+            .post(Uri.parse('$_base/$model:generateContent'), headers: _headers, body: payload)
+            .timeout(const Duration(seconds: 60));
+        if (res.statusCode == 429) {
+          problems.add('$model error 429 (image editing needs a paid Google plan)');
+          continue;
+        }
+        if (res.statusCode != 200) {
+          problems.add('$model error ${res.statusCode}');
+          continue;
+        }
+        final Map<String, dynamic> data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+        final List<dynamic>? candidates = data['candidates'] as List<dynamic>?;
+        if (candidates == null || candidates.isEmpty) {
+          problems.add('$model returned no image');
+          continue;
+        }
+        final Map<dynamic, dynamic> first = candidates.first as Map;
+        final Map<dynamic, dynamic>? content = first['content'] as Map?;
+        final List<dynamic> parts = (content?['parts'] as List<dynamic>?) ?? <dynamic>[];
+        for (final dynamic part in parts) {
+          final Map<dynamic, dynamic> map = part as Map;
+          final dynamic inline = map['inlineData'] ?? map['inline_data'];
+          if (inline != null) {
+            return base64Decode((inline as Map)['data'] as String);
+          }
+        }
+        problems.add('$model returned no image');
+      } on TimeoutException {
+        problems.add('$model took too long');
+      } catch (e) {
+        problems.add('$model ${_short(e.toString().replaceFirst('Exception: ', ''))}');
+      }
     }
     throw Exception(problems.join(' | '));
   }
