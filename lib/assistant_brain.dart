@@ -7,6 +7,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 import 'command_router.dart';
+import 'floating.dart';
 import 'local_store.dart';
 import 'native_bridge.dart';
 import 'permission_helper.dart';
@@ -34,7 +35,7 @@ class AssistantBrain extends ChangeNotifier {
   List<ChatEntry> entries = <ChatEntry>[];
   PendingAsk? pending;
 
-  /// When a screen (like the camera assistant) sets this, spoken sentences go to it instead of the router.
+  /// When a screen (like the camera assistant or photo editor) sets this, spoken sentences go to it instead of the router.
   Future<void> Function(String text)? onHeardOverride;
 
   bool active = false;
@@ -83,7 +84,10 @@ class AssistantBrain extends ChangeNotifier {
 
   @override
   void notifyListeners() {
-    if (!_disposed) super.notifyListeners();
+    if (!_disposed) {
+      super.notifyListeners();
+      FloatingHub.sync(this);
+    }
   }
 
   void refresh() => notifyListeners();
@@ -165,6 +169,7 @@ class AssistantBrain extends ChangeNotifier {
 
   Future<void> start() async {
     entries = LocalStore.loadChat();
+    FloatingHub.attach(this);
     try {
       await _tts.awaitSpeakCompletion(true);
       await _tts.setSpeechRate(0.5);
@@ -431,6 +436,7 @@ class AssistantBrain extends ChangeNotifier {
       await _stt.stop();
       final bool hindi = RegExp(r'[\u0900-\u097F]').hasMatch(text);
       await _tts.setLanguage(hindi ? 'hi-IN' : 'en-IN');
+      await VoiceHub.apply(_tts, hindi);
       await _tts.speak(text).timeout(const Duration(seconds: 25), onTimeout: () => null);
     } catch (_) {}
     _speaking = false;
@@ -454,7 +460,7 @@ class AssistantBrain extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Tap on the boy: wake him up, or send him to rest.
+  /// Tap on the boy or the mic: wake him up, or send him to rest.
   Future<void> toggle() async {
     if (active && !sleeping) {
       pending = null;
@@ -523,7 +529,7 @@ class AssistantBrain extends ChangeNotifier {
     } else {
       background = false;
       await LocalStore.setFlag('background', false);
-      await Device.stopListenService();
+      if (!FloatingHub.enabled) await Device.stopListenService();
       if (!active) {
         _keepListening = false;
         try {
@@ -549,6 +555,7 @@ class AssistantBrain extends ChangeNotifier {
     _watchdog?.cancel();
     _assistPoll?.cancel();
     _idleTimer?.cancel();
+    FloatingHub.detach();
     _stt.cancel();
     _tts.stop();
     if (_muted) {
