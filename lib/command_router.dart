@@ -1,13 +1,17 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'ai_client.dart';
 import 'assistant_brain.dart';
 import 'env.dart';
+import 'floating.dart';
 import 'local_store.dart';
 import 'music_player.dart';
 import 'native_bridge.dart';
 import 'permission_helper.dart';
 import 'screens/camera_assist_screen.dart';
+import 'screens/photo_editor_screen.dart';
+import 'vision_client.dart';
 
 /// Decides what a sentence means: device action, contacts, music, image, or AI chat.
 class CommandRouter {
@@ -57,6 +61,32 @@ class CommandRouter {
     // Camera assistant (live camera: ask questions or take a photo)
     if (_is(t, r'camera (assist|assistant|ai|vision)|(assist|assistant|ai|vision) camera|look at this|what am i (holding|showing)|scan this')) {
       return _openCameraAssist();
+    }
+
+    // Photo editor
+    if (_is(t, r'(edit|improve|fix|retouch)\s+(a |the |my |this )?(photo|picture|image|pic)|photo edit(or)?|image edit(or)?')) {
+      return _openPhotoEditor();
+    }
+
+    // Change Penta's voice
+    if (_is(t, r'(boy|male|ladka|ladke)\s*(voice|awaaz|awaz)|(voice|awaaz|awaz).*\b(boy|male|ladka|ladke)\b')) {
+      await VoiceHub.setBoy(true);
+      return 'Theek hai, ab main ladke ki awaaz mein bolunga.';
+    }
+    if (_is(t, r'(girl|female|ladki)\s*(voice|awaaz|awaz)|(voice|awaaz|awaz).*\b(girl|female|ladki)\b')) {
+      await VoiceHub.setBoy(false);
+      return 'Theek hai, ab main ladki ki awaaz mein bolungi.';
+    }
+
+    // Screen sharing
+    if (_is(t, r'(start|begin|turn on)\s+(screen\s*share|sharing)|share\s+(my|the|your)?\s*screen|screen\s*share\s*(karo|on|start)|apni screen')) {
+      return FloatingHub.startShare();
+    }
+    if (_is(t, r'(stop|end|turn off|band)\s+(screen\s*share|sharing)|screen\s*share\s*(band|off|stop)')) {
+      return FloatingHub.stopShare();
+    }
+    if (_is(t, r'(look at|see|check|watch)\s+(my|the)\s+screen|what do you see|screen (dekho|dekh)')) {
+      return _askScreen('Describe briefly what is on my screen and what I could do next.');
     }
 
     // Phone control
@@ -285,6 +315,9 @@ class CommandRouter {
     m ??= RegExp(r'^(.+?)\s+(?:kholo|khol do|khol de|open karo|chalu karo|chalao|start karo)$').firstMatch(t);
     if (m != null) return _openApp(m.group(1)!);
 
+    // While the screen is shared, questions are answered from what is on the screen
+    if (FloatingHub.sharing) return _askScreen(stripped);
+
     // Everything else goes to the AI
     final List<ChatEntry> history = brain.entries.length > 1
         ? brain.entries.sublist(0, brain.entries.length - 1)
@@ -312,6 +345,21 @@ class CommandRouter {
     ];
     final DateTime n = DateTime.now();
     return '${days[n.weekday - 1]}, ${n.day} ${months[n.month - 1]} ${n.year}';
+  }
+
+  Future<String> _askScreen(String question) async {
+    final Uint8List? shot = await Floating.captureScreen();
+    if (shot == null || shot.isEmpty) {
+      return 'I could not capture the screen. Please start screen share again.';
+    }
+    return VisionClient.ask('$_style$question', shot);
+  }
+
+  Future<String> _openPhotoEditor() async {
+    final NavigatorState? nav = rootNav.currentState;
+    if (nav == null) return 'I could not open the photo editor.';
+    nav.push(MaterialPageRoute<void>(builder: (BuildContext c) => PhotoEditorScreen(brain: brain)));
+    return 'Photo editor is open. Pick a photo and tell me what to change.';
   }
 
   Future<String> _openCameraAssist() async {
@@ -342,6 +390,7 @@ class CommandRouter {
   }
 
   Future<String> _readScreen() async {
+    if (FloatingHub.sharing) return _askScreen('Tell me briefly what is on my screen.');
     if (!await Device.screenshotReady()) return _needAccessibility('read the screen');
     final String text = await Device.readScreen();
     if (text.isEmpty || text == 'no_service' || text == 'error') return 'I could not read this screen.';
