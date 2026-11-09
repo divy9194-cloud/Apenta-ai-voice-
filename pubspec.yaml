@@ -17,6 +17,7 @@ dependencies:
   shared_preferences: ^2.3.2
   path_provider: ^2.1.4
   camera: ^0.11.0
+  image_picker: ^1.1.2
 flutter:
   uses-material-design: true
   assets:
