@@ -41,25 +41,57 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    // The floating Penta box appears when you leave the app (Home, recents, or opening another app).
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        PentaExtras.onLeave(this)
+    }
+
+    override fun onPause() {
+        super.onPause()
+        PentaExtras.onPause()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        PentaExtras.onResume(this)
+    }
+
+    // The photo picker and similar screens should not trigger the floating box.
+    override fun startActivityForResult(intent: Intent, requestCode: Int, options: Bundle?) {
+        if (requestCode != 4242) {
+            PentaExtras.suppressUntil = System.currentTimeMillis() + 90000L
+        }
+        super.startActivityForResult(intent, requestCode, options)
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        PentaExtras.onResult(this, requestCode, resultCode, data)
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "penta/device")
-            .setMethodCallHandler { call, result ->
-                try {
-                    when (call.method) {
-                        "typeText" -> typeText(call.argument<String>("text") ?: "", result)
-                        "pressSearch" -> pressSearch(result)
-                        "saveToGallery" -> result.success(saveToGallery(call.argument<String>("path") ?: ""))
-                        "searchInOpenApp" -> searchInOpenApp(call.argument<String>("query") ?: "", result)
-                        "scroll" -> inOtherApp(result) { svc -> svc.scroll(call.argument<Boolean>("forward") != false) }
-                        "tapText" -> inOtherApp(result) { svc -> svc.clickByText(call.argument<String>("text") ?: "") }
-                        "readScreen" -> inOtherApp(result) { svc -> svc.screenText() }
-                        else -> result.success(handle(call))
-                    }
-                } catch (e: Exception) {
-                    result.error("PENTA", e.message, null)
+        val channel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "penta/device")
+        PentaExtras.channel = channel
+        channel.setMethodCallHandler { call, result ->
+            try {
+                if (PentaExtras.handle(this, call, result)) return@setMethodCallHandler
+                when (call.method) {
+                    "typeText" -> typeText(call.argument<String>("text") ?: "", result)
+                    "pressSearch" -> pressSearch(result)
+                    "saveToGallery" -> result.success(saveToGallery(call.argument<String>("path") ?: ""))
+                    "searchInOpenApp" -> searchInOpenApp(call.argument<String>("query") ?: "", result)
+                    "scroll" -> inOtherApp(result) { svc -> svc.scroll(call.argument<Boolean>("forward") != false) }
+                    "tapText" -> inOtherApp(result) { svc -> svc.clickByText(call.argument<String>("text") ?: "") }
+                    "readScreen" -> inOtherApp(result) { svc -> svc.screenText() }
+                    else -> result.success(handle(call))
                 }
+            } catch (e: Exception) {
+                result.error("PENTA", e.message, null)
             }
+        }
     }
 
     // Steps back to the previous app, then runs the action on that app's screen.
@@ -130,14 +162,35 @@ class MainActivity : FlutterActivity() {
         }, 1800)
     }
 
-    // Copies a photo taken in the camera assistant into the phone Gallery.
+    // Copies a photo into the phone Gallery.
     private fun saveToGallery(path: String): Boolean {
         return try {
             @Suppress("DEPRECATION")
             val url = MediaStore.Images.Media.insertImage(
-                contentResolver, path, "Penta ${System.currentTimeMillis()}", "Photo taken with Penta"
+                contentResolver, path, "Penta ${System.currentTimeMillis()}", "Photo made with Penta"
             )
             url != null
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    // Sends a picture to another app (for example Canva). The photo is also saved to the Gallery.
+    private fun shareImage(path: String, pkg: String): Boolean {
+        return try {
+            @Suppress("DEPRECATION")
+            val url = MediaStore.Images.Media.insertImage(
+                contentResolver, path, "Penta ${System.currentTimeMillis()}", "Photo edited with Penta"
+            ) ?: return false
+            val uri = Uri.parse(url)
+            val send = Intent(Intent.ACTION_SEND)
+            send.type = "image/*"
+            send.putExtra(Intent.EXTRA_STREAM, uri)
+            send.setPackage(pkg)
+            send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+            PentaExtras.suppressUntil = System.currentTimeMillis() + 90000L
+            startActivity(send)
+            true
         } catch (e: Exception) {
             false
         }
@@ -305,6 +358,7 @@ class MainActivity : FlutterActivity() {
             "camera" -> launch(Intent(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA))
             "gallery" -> launch(Intent(Intent.ACTION_VIEW).setType("image/*"))
             "openUrl" -> launch(Intent(Intent.ACTION_VIEW, Uri.parse(call.argument<String>("url") ?: "")))
+            "shareImage" -> shareImage(call.argument<String>("path") ?: "", call.argument<String>("package") ?: "")
             "screenshotReady" -> ScreenshotService.instance != null
             "askScreenshotAccess" -> launch(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
             "screenshot" -> {
