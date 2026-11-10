@@ -57,7 +57,7 @@ class _PentaAvatarState extends State<PentaAvatar> with SingleTickerProviderStat
               borderRadius: BorderRadius.circular(32),
               boxShadow: [
                 BoxShadow(
-                  color: (widget.speaking || widget.active ? cyan : violet).withOpacity(glow),
+                  color: (widget.speaking || widget.active ? cyan : violet).withValues(alpha: (glow * 255).round()),
                   blurRadius: widget.speaking || widget.active ? 40 : 20,
                   spreadRadius: 2,
                 ),
@@ -68,7 +68,6 @@ class _PentaAvatarState extends State<PentaAvatar> with SingleTickerProviderStat
               child: Stack(
                 alignment: Alignment.center,
                 children: [
-                  // background
                   Container(
                     width: double.infinity,
                     height: double.infinity,
@@ -83,8 +82,6 @@ class _PentaAvatarState extends State<PentaAvatar> with SingleTickerProviderStat
                       ),
                     ),
                   ),
-
-                  // orbit glow
                   Positioned.fill(
                     child: CustomPaint(
                       painter: _GlowPainter(
@@ -95,8 +92,6 @@ class _PentaAvatarState extends State<PentaAvatar> with SingleTickerProviderStat
                       ),
                     ),
                   ),
-
-                  // central face
                   Transform.translate(
                     offset: Offset(
                       math.sin(t * 1.8) * 8,
@@ -115,7 +110,7 @@ class _PentaAvatarState extends State<PentaAvatar> with SingleTickerProviderStat
                           ),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.2),
+                              color: Colors.black.withValues(alpha: 51),
                               blurRadius: 18,
                               offset: const Offset(0, 10),
                             )
@@ -167,10 +162,10 @@ class _GlowPainter extends CustomPainter {
       final y = size.height / 2 + math.sin(angle) * radius * 0.9;
 
       final glowColor = speaking
-          ? cyan.withOpacity(0.25)
+          ? cyan.withValues(alpha: 64)
           : active
-              ? violet.withOpacity(0.2)
-              : Colors.white.withOpacity(0.08);
+              ? violet.withValues(alpha: 51)
+              : Colors.white.withValues(alpha: 20);
 
       paint.color = glowColor;
       canvas.drawCircle(Offset(x, y), 14 + (i % 4) * 6, paint);
@@ -206,7 +201,6 @@ class _FacePainter extends CustomPainter {
     final center = Offset(size.width / 2, size.height / 2);
     final bodyPaint = Paint()..color = const Color(0xFF1B244A);
 
-    // shirt/body
     final body = RRect.fromRectAndRadius(
       Rect.fromCenter(
         center: Offset(center.dx, size.height * 0.7),
@@ -217,7 +211,6 @@ class _FacePainter extends CustomPainter {
     );
     canvas.drawRRect(body, bodyPaint);
 
-    // hair
     final hairPaint = Paint()..color = const Color(0xFF1A1A2E);
     final hairRect = Rect.fromCenter(
       center: Offset(center.dx, size.height * 0.28),
@@ -226,17 +219,21 @@ class _FacePainter extends CustomPainter {
     );
     canvas.drawOval(hairRect, hairPaint);
 
-    // face features
     final skin = Paint()..color = const Color(0xFFF3C9A6);
 
-    // cheeks
-    canvas.drawCircle(Offset(size.width * 0.32, size.height * 0.52), 10, Paint()..color = const Color(0xFFf0a7a7).withOpacity(0.5));
-    canvas.drawCircle(Offset(size.width * 0.68, size.height * 0.52), 10, Paint()..color = const Color(0xFFf0a7a7).withOpacity(0.5));
+    canvas.drawCircle(
+      Offset(size.width * 0.32, size.height * 0.52),
+      10,
+      Paint()..color = const Color(0xFFf0a7a7).withValues(alpha: 128),
+    );
+    canvas.drawCircle(
+      Offset(size.width * 0.68, size.height * 0.52),
+      10,
+      Paint()..color = const Color(0xFFf0a7a7).withValues(alpha: 128),
+    );
 
-    // face outline
     canvas.drawCircle(center, size.width * 0.28, skin);
 
-    // eyebrows
     final browPaint = Paint()
       ..color = const Color(0xFF2A1C37)
       ..strokeWidth = 3
@@ -253,7 +250,6 @@ class _FacePainter extends CustomPainter {
       browPaint,
     );
 
-    // eyes
     final eyePaint = Paint()..color = const Color(0xFF1F1B2E);
 
     final blink = speaking ? 0.25 + (0.75 * math.sin(t * 10)) : 0.15;
@@ -262,11 +258,14 @@ class _FacePainter extends CustomPainter {
     canvas.drawCircle(Offset(size.width * 0.36, size.height * 0.45), eyeRadius, eyePaint);
     canvas.drawCircle(Offset(size.width * 0.64, size.height * 0.45), eyeRadius, eyePaint);
 
-    // mouth
-    final mouthOpen = speaking ? 12 + (level * 18) : thinking ? 7 : 4;
+    final mouthOpen = speaking
+        ? 12.0 + (level * 18.0)
+        : thinking
+            ? 7.0
+            : 4.0;
     final mouthRect = Rect.fromCenter(
       center: Offset(size.width / 2, size.height * 0.58),
-      width: 52,
+      width: 52.0,
       height: mouthOpen,
     );
     canvas.drawRRect(
@@ -277,7 +276,6 @@ class _FacePainter extends CustomPainter {
       Paint()..color = const Color(0xFF5B2A3B),
     );
 
-    // butterfly / glowing accent
     final accentPaint = Paint()
       ..shader = const RadialGradient(
         colors: [Color(0xFFB6EAFD), Color(0xFF7DD3FC), Color(0xFF26263E)],
