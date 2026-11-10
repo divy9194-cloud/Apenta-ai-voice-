@@ -57,7 +57,7 @@ class _PentaAvatarState extends State<PentaAvatar> with SingleTickerProviderStat
               borderRadius: BorderRadius.circular(32),
               boxShadow: [
                 BoxShadow(
-                  color: (widget.speaking || widget.active ? cyan : violet).withValues(alpha: (glow * 255).round()),
+                  color: (widget.speaking || widget.active ? cyan : violet).withOpacity(glow),
                   blurRadius: widget.speaking || widget.active ? 40 : 20,
                   spreadRadius: 2,
                 ),
@@ -110,7 +110,7 @@ class _PentaAvatarState extends State<PentaAvatar> with SingleTickerProviderStat
                           ),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withValues(alpha: 51),
+                              color: Colors.black.withOpacity(0.2),
                               blurRadius: 18,
                               offset: const Offset(0, 10),
                             )
@@ -162,10 +162,10 @@ class _GlowPainter extends CustomPainter {
       final y = size.height / 2 + math.sin(angle) * radius * 0.9;
 
       final glowColor = speaking
-          ? cyan.withValues(alpha: 64)
+          ? cyan.withOpacity(0.25)
           : active
-              ? violet.withValues(alpha: 51)
-              : Colors.white.withValues(alpha: 20);
+              ? violet.withOpacity(0.2)
+              : Colors.white.withOpacity(0.08);
 
       paint.color = glowColor;
       canvas.drawCircle(Offset(x, y), 14 + (i % 4) * 6, paint);
@@ -224,12 +224,12 @@ class _FacePainter extends CustomPainter {
     canvas.drawCircle(
       Offset(size.width * 0.32, size.height * 0.52),
       10,
-      Paint()..color = const Color(0xFFf0a7a7).withValues(alpha: 128),
+      Paint()..color = const Color(0xFFf0a7a7).withOpacity(0.5),
     );
     canvas.drawCircle(
       Offset(size.width * 0.68, size.height * 0.52),
       10,
-      Paint()..color = const Color(0xFFf0a7a7).withValues(alpha: 128),
+      Paint()..color = const Color(0xFFf0a7a7).withOpacity(0.5),
     );
 
     canvas.drawCircle(center, size.width * 0.28, skin);
@@ -263,11 +263,13 @@ class _FacePainter extends CustomPainter {
         : thinking
             ? 7.0
             : 4.0;
+
     final mouthRect = Rect.fromCenter(
       center: Offset(size.width / 2, size.height * 0.58),
       width: 52.0,
       height: mouthOpen,
     );
+
     canvas.drawRRect(
       RRect.fromRectAndRadius(
         mouthRect,
