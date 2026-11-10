@@ -25,7 +25,6 @@ class _BoyAvatarState extends State<BoyAvatar> with TickerProviderStateMixin {
   void initState() {
     super.initState();
 
-    // Controller for maximum hand gestures and body movement
     _gestureController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1200),
@@ -35,7 +34,6 @@ class _BoyAvatarState extends State<BoyAvatar> with TickerProviderStateMixin {
       CurvedAnimation(parent: _gestureController, curve: Curves.easeInOut),
     );
 
-    // Controller for facial expressions (mouth/eyes)
     _faceController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 250),
@@ -67,7 +65,6 @@ class _BoyAvatarState extends State<BoyAvatar> with TickerProviderStateMixin {
           child: Stack(
             alignment: Alignment.center,
             children: [
-              // Base Boy Photo (Butterfly-catching pose reference)
               ClipRRect(
                 borderRadius: BorderRadius.circular(20),
                 child: Image.asset(
@@ -77,8 +74,6 @@ class _BoyAvatarState extends State<BoyAvatar> with TickerProviderStateMixin {
                   fit: BoxFit.cover,
                 ),
               ),
-
-              // Dynamic Gesture tracking indicator overlay
               Positioned(
                 bottom: 35,
                 child: Transform.rotate(
@@ -95,8 +90,6 @@ class _BoyAvatarState extends State<BoyAvatar> with TickerProviderStateMixin {
                   ),
                 ),
               ),
-
-              // Active Speech / Mouth Movement indicator overlay
               if (widget.isSpeaking)
                 Positioned(
                   top: 95,
