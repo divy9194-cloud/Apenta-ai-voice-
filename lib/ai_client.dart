@@ -3,10 +3,12 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
+import 'claude_client.dart';
 import 'env.dart';
+import 'local_edit.dart';
 import 'local_store.dart';
 
-/// Chat uses Gemini. Images use Meta Muse Image first, then Gemini, then a free service.
+/// Chat uses Claude (Gemini as backup). Pictures use Meta Muse Image, Gemini, or a free service.
 class AiClient {
   static const String _base = 'https://generativelanguage.googleapis.com/v1beta/models';
   static const String _persona =
@@ -23,6 +25,15 @@ class AiClient {
   static String _clean(Object e) => _short(e.toString().replaceFirst('Exception: ', ''));
 
   // ---------------------------------------------------------------- chat
+
+  static List<ChatEntry> _recent(List<ChatEntry> history) {
+    final List<ChatEntry> recent =
+        List<ChatEntry>.from(history.length > 10 ? history.sublist(history.length - 10) : history);
+    while (recent.isNotEmpty && !recent.first.fromUser) {
+      recent.removeAt(0);
+    }
+    return recent;
+  }
 
   static String? _readAnswer(String body) {
     final Map<String, dynamic> data = jsonDecode(body) as Map<String, dynamic>;
@@ -42,13 +53,7 @@ class AiClient {
     return answer.isEmpty ? null : answer;
   }
 
-  static Future<String> chat(String prompt, List<ChatEntry> history) async {
-    if (AppEnv.geminiKey.isEmpty) return 'The Gemini API key is not configured.';
-    final List<ChatEntry> recent =
-        List<ChatEntry>.from(history.length > 10 ? history.sublist(history.length - 10) : history);
-    while (recent.isNotEmpty && !recent.first.fromUser) {
-      recent.removeAt(0);
-    }
+  static Future<String?> _geminiChat(String prompt, List<ChatEntry> recent, List<String> problems) async {
     final List<Map<String, dynamic>> contents = <Map<String, dynamic>>[];
     for (final ChatEntry e in recent) {
       contents.add({
@@ -72,10 +77,8 @@ class AiClient {
       },
       'contents': contents,
     });
-
     final List<String> models = <String>[AppEnv.chatModel, 'gemini-flash-lite-latest', 'gemini-3.6-flash'];
     final List<String> tried = <String>[];
-    String lastProblem = 'no model answered';
     for (final String model in models) {
       if (tried.contains(model)) continue;
       tried.add(model);
@@ -87,18 +90,46 @@ class AiClient {
         if (res.statusCode == 200) {
           final String? answer = _readAnswer(body);
           if (answer != null) return answer;
-          lastProblem = '$model gave an empty answer';
+          problems.add('$model gave an empty answer');
           continue;
         }
-        lastProblem = '$model error ${res.statusCode}: ${_short(body)}';
+        problems.add('$model error ${res.statusCode}: ${_short(body)}');
         if (res.statusCode == 400 || res.statusCode == 401 || res.statusCode == 403) break;
       } on TimeoutException {
-        lastProblem = '$model took too long';
+        problems.add('$model took too long');
       } catch (e) {
-        lastProblem = '$model: ${_short(e.toString())}';
+        problems.add('$model: ${_short(e.toString())}');
       }
     }
-    return 'AI problem: $lastProblem';
+    return null;
+  }
+
+  static Future<String> chat(String prompt, List<ChatEntry> history) async {
+    final List<ChatEntry> recent = _recent(history);
+    final List<String> problems = <String>[];
+
+    if (ClaudeClient.ready) {
+      try {
+        final List<Map<String, dynamic>> msgs = <Map<String, dynamic>>[];
+        for (final ChatEntry e in recent) {
+          msgs.add({'role': e.fromUser ? 'user' : 'assistant', 'content': e.text});
+        }
+        msgs.add({'role': 'user', 'content': prompt});
+        return await ClaudeClient.ask(system: _persona, messages: msgs);
+      } on TimeoutException {
+        problems.add('Claude took too long');
+      } catch (e) {
+        problems.add('Claude ${_clean(e)}');
+      }
+    } else {
+      problems.add('Claude key is not set (add ANTHROPIC_API_KEY)');
+    }
+
+    if (AppEnv.geminiKey.isNotEmpty) {
+      final String? answer = await _geminiChat(prompt, recent, problems);
+      if (answer != null) return answer;
+    }
+    return 'AI problem: ${problems.join(' | ')}';
   }
 
   // ---------------------------------------------------------------- image helpers
@@ -183,7 +214,7 @@ class AiClient {
           }),
         )
         .timeout(const Duration(seconds: 60));
-    if (res.statusCode == 429) throw Exception('error 429 (Gemini images need a paid Google plan)');
+    if (res.statusCode == 429) throw Exception('error 429 (Gemini pictures need a paid Google plan)');
     if (res.statusCode != 200) throw Exception('error ${res.statusCode}');
     final Map<String, dynamic> data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
     final List<dynamic>? candidates = data['candidates'] as List<dynamic>?;
@@ -230,6 +261,8 @@ class AiClient {
       } catch (e) {
         problems.add('Meta ${_clean(e)}');
       }
+    } else {
+      problems.add('Meta key is not set (add META_API_KEY)');
     }
     if (AppEnv.geminiKey.isNotEmpty) {
       final List<String> models = <String>[AppEnv.imageModel, 'gemini-3.1-flash-lite-image'];
@@ -266,8 +299,13 @@ class AiClient {
     return LocalStore.saveImage(bytes);
   }
 
-  /// Edits a photo with Meta Muse Image (Gemini as backup). Returns the new picture's bytes.
+  /// Edits a photo. Simple edits run on the phone; the rest use Meta Muse Image (Gemini as backup).
   static Future<Uint8List> editImage(Uint8List photo, String instruction) async {
+    if (LocalEdit.canHandle(instruction)) {
+      try {
+        return await LocalEdit.apply(photo, instruction);
+      } catch (_) {}
+    }
     final List<String> problems = <String>[];
     if (AppEnv.metaKey.isNotEmpty) {
       try {
@@ -298,6 +336,7 @@ class AiClient {
         problems.add('Gemini ${_clean(e)}');
       }
     }
+    problems.add('Tip: black and white, sepia, brighten, darken, enhance, warm, cool, flip and rotate work without any key');
     throw Exception(problems.join(' | '));
   }
 }
