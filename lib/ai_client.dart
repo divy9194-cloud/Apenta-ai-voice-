@@ -17,7 +17,6 @@ class AiClient {
 
     final List> content = [];
 
-    // Attach reference images / photos if provided
     if (imageBytesList != null) {
       for (var img in imageBytesList) {
         content.add({
@@ -56,8 +55,11 @@ class AiClient {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        final contents = data['content'] as List;
-        return contents.first['text'] ?? '';
+        final contents = data['content'] as List<dynamic>;
+        if (contents.isNotEmpty) {
+          return contents.first['text'] as String? ?? '';
+        }
+        return '';
       } else {
         throw Exception('Claude API Error (${response.statusCode}): ${response.body}');
       }
