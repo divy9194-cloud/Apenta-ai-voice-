@@ -283,7 +283,15 @@ class _HomeScreenState extends State<HomeScreen> {
                     padding: const EdgeInsets.fromLTRB(14, 6, 14, 6),
                     child: Stack(
                       children: [
-                        Positioned.fill(child: CharacterView(brain: brain)),
+                        Positioned.fill(
+                          child: Center(
+                            child: BoyAvatar(
+                              mood: mood,
+                              level: brain.level,
+                              onTap: brain.toggle,
+                            ),
+                          ),
+                        ),
                         Positioned(
                           left: 12,
                           top: 12,
