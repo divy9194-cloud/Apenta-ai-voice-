@@ -21,4 +21,4 @@ dependencies:
 flutter:
   uses-material-design: true
   assets:
-    - assets/3265c5569313447d957ca11c1d30ae5e.0000000.jpg
+    - assets/boy.jpg
