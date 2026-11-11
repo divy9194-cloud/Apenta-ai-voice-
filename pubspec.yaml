@@ -25,5 +25,4 @@ dependencies:
 flutter:
   uses-material-design: true
   assets:
-    - assets/boy.jpg
     - assets/penta_avatar.glb
