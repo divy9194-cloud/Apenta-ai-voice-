@@ -4,8 +4,8 @@ import 'package:http/http.dart' as http;
 import '../assistant_brain.dart';
 import '../local_store.dart';
 import '../widgets/boy_avatar.dart';
-import '../widgets/character_view.dart';
 import '../widgets/common.dart';
+import '../widgets/live_avatar.dart';
 import 'camera_assist_screen.dart';
 import 'photo_editor_screen.dart';
 
@@ -203,7 +203,6 @@ class _HomeScreenState extends State<HomeScreen> {
           child: SafeArea(
             child: Column(
               children: [
-                // Header
                 Padding(
                   padding: const EdgeInsets.fromLTRB(18, 10, 8, 0),
                   child: Row(
@@ -277,20 +276,13 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
 
-                // The character
                 Expanded(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(14, 6, 14, 6),
                     child: Stack(
                       children: [
-                        Positioned.fill(
-                          child: Center(
-                            child: BoyAvatar(
-                              mood: mood,
-                              level: brain.level,
-                              onTap: brain.toggle,
-                            ),
-                          ),
+                        const Positioned.fill(
+                          child: LiveAvatar(),
                         ),
                         Positioned(
                           left: 12,
@@ -316,10 +308,10 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                 ),
+
                 if (brain.lastEvent.contains('error'))
                   Text(brain.lastEvent, style: const TextStyle(fontSize: 10, color: Colors.white38)),
 
-                // Quick buttons
                 Padding(
                   padding: const EdgeInsets.fromLTRB(10, 2, 10, 8),
                   child: Row(
@@ -357,7 +349,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
 
-                // Info cards
                 Padding(
                   padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
                   child: Row(
