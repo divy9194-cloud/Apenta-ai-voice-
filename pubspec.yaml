@@ -2,8 +2,10 @@ name: penta
 description: Penta AI Voice Assistant by Divyanshu Kumar
 publish_to: 'none'
 version: 1.0.0+1
+
 environment:
   sdk: '>=3.3.0 <4.0.0'
+
 dependencies:
   flutter:
     sdk: flutter
@@ -18,7 +20,10 @@ dependencies:
   path_provider: ^2.1.4
   camera: ^0.11.0
   image_picker: ^1.1.2
+  model_viewer_plus: ^1.9.3
+
 flutter:
   uses-material-design: true
   assets:
+    - assets/boy.jpg
     - assets/penta_avatar.glb
