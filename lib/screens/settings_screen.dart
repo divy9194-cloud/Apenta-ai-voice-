@@ -141,6 +141,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onTap: _editName,
           ),
           ListTile(
+            leading: const Icon(Icons.bolt, color: neonCyan),
+            title: const Text('Test Claude connection'),
+            subtitle: const Text('Checks your key, model and speed.'),
+            onTap: () {
+              showDialog<void>(
+                context: context,
+                builder: (BuildContext d) => FutureBuilder<String>(
+                  future: ClaudeClient.test(),
+                  builder: (BuildContext c, AsyncSnapshot<String> s) => AlertDialog(
+                    title: const Text('Claude test'),
+                    content: s.hasData
+                        ? Text(s.data!)
+                        : const SizedBox(height: 60, child: Center(child: CircularProgressIndicator())),
+                    actions: [TextButton(onPressed: () => Navigator.pop(d), child: const Text('Close'))],
+                  ),
+                ),
+              );
+            },
+          ),
+          ListTile(
             leading: const Icon(Icons.face_retouching_natural),
             title: const Text('Reset Penta\'s picture'),
             subtitle: const Text('Go back to the original boy picture. Change it any time in the Photo editor.'),
