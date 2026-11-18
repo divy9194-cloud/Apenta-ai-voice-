@@ -76,4 +76,27 @@ class ClaudeClient {
     if (answer == null) throw Exception('gave an empty answer');
     return answer;
   }
+    /// Quick check used by Settings. Returns a short report.
+  static Future<String> test() async {
+    if (!ready) return 'No key. Add the ANTHROPIC_API_KEY secret and rebuild the app.';
+    final String k = AppEnv.claudeKey;
+    final String masked = k.length > 12 ? '${k.substring(0, 7)}…${k.substring(k.length - 4)}' : 'too short';
+    final String warn = k != k.trim() ? '\nWarning: the key has a space or new line. Re-paste it.' : '';
+    final DateTime start = DateTime.now();
+    try {
+      final String reply = await ask(
+        system: 'Reply with exactly: OK',
+        messages: <Map<String, dynamic>>[
+          {'role': 'user', 'content': 'Test'}
+        ],
+        maxTokens: 300,
+        timeout: const Duration(seconds: 25),
+      );
+      final int ms = DateTime.now().difference(start).inMilliseconds;
+      final String shown = reply.length > 40 ? reply.substring(0, 40) : reply;
+      return 'Claude is working.\nModel: ${AppEnv.claudeModel}\nEffort: ${AppEnv.claudeEffort}\nReply: $shown\nTime: $ms ms\nKey: $masked$warn';
+    } catch (e) {
+      return 'Claude failed.\n${e.toString().replaceFirst('Exception: ', '')}\nKey: $masked$warn';
+    }
+  }
 }
