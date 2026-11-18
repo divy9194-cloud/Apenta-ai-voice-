@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../assistant_brain.dart';
+import '../claude_client.dart';
 import '../firebase_auth_service.dart';
 import '../floating.dart';
 import '../local_store.dart';
