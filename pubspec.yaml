@@ -23,5 +23,6 @@ dependencies:
   model_viewer_plus: ^1.9.3
 
 flutter:
-  uses-material-design: true
+  uses-material-design: true. 
+assets:
   assets/penta_wave.mp4
