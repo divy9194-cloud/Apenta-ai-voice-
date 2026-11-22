@@ -1,16 +1,23 @@
 import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+
 import '../assistant_brain.dart';
 import '../local_store.dart';
 import '../widgets/boy_avatar.dart';
 import '../widgets/common.dart';
-import '../widgets/live_avatar.dart';
+import '../widgets/waving_avatar_video.dart';
 import 'camera_assist_screen.dart';
 import 'photo_editor_screen.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key, required this.brain, required this.onOpenTab});
+  const HomeScreen({
+    super.key,
+    required this.brain,
+    required this.onOpenTab,
+  });
+
   final AssistantBrain brain;
   final void Function(int index) onOpenTab;
 
@@ -25,9 +32,29 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _loadingWeather = false;
 
   static const List<String> _months = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
   ];
-  static const List<String> _days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+  static const List<String> _days = [
+    'Mon',
+    'Tue',
+    'Wed',
+    'Thu',
+    'Fri',
+    'Sat',
+    'Sun',
+  ];
 
   @override
   void initState() {
@@ -36,26 +63,32 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _updateStreak() {
-    final DateTime now = DateTime.now();
-    final String today = '${now.year}-${now.month}-${now.day}';
-    final String? last = LocalStore.prefs.getString('streakDay');
+    final now = DateTime.now();
+    final today = '${now.year}-${now.month}-${now.day}';
+    final last = LocalStore.prefs.getString('streakDay');
+
     int streak = LocalStore.prefs.getInt('streak') ?? 0;
+
     if (last != today) {
-      final DateTime y = now.subtract(const Duration(days: 1));
-      final String yesterday = '${y.year}-${y.month}-${y.day}';
+      final yesterdayDate = now.subtract(const Duration(days: 1));
+      final yesterday =
+          '${yesterdayDate.year}-${yesterdayDate.month}-${yesterdayDate.day}';
+
       streak = (last == yesterday) ? streak + 1 : 1;
       LocalStore.prefs.setString('streakDay', today);
       LocalStore.prefs.setInt('streak', streak);
     }
+
     _streak = streak == 0 ? 1 : streak;
   }
 
   String _greeting() {
-    final int h = DateTime.now().hour;
-    if (h < 5) return 'Good night';
-    if (h < 12) return 'Good morning';
-    if (h < 17) return 'Good afternoon';
-    if (h < 21) return 'Good evening';
+    final hour = DateTime.now().hour;
+
+    if (hour < 5) return 'Good night';
+    if (hour < 12) return 'Good morning';
+    if (hour < 17) return 'Good afternoon';
+    if (hour < 21) return 'Good evening';
     return 'Good night';
   }
 
@@ -73,24 +106,42 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _loadWeather() async {
     if (_loadingWeather) return;
+
     setState(() {
       _loadingWeather = true;
       _weatherNote = 'Loading…';
     });
+
     try {
-      final http.Response loc = await http.get(Uri.parse('https://ipwho.is/')).timeout(const Duration(seconds: 10));
-      final Map<String, dynamic> l = jsonDecode(loc.body) as Map<String, dynamic>;
-      final double lat = (l['latitude'] as num).toDouble();
-      final double lon = (l['longitude'] as num).toDouble();
-      final http.Response w = await http
-          .get(Uri.parse(
-              'https://api.open-meteo.com/v1/forecast?latitude=$lat&longitude=$lon&current=temperature_2m,weather_code'))
+      final locationResponse = await http
+          .get(Uri.parse('https://ipwho.is/'))
           .timeout(const Duration(seconds: 10));
-      final Map<String, dynamic> data = jsonDecode(w.body) as Map<String, dynamic>;
-      final Map<String, dynamic> cur = data['current'] as Map<String, dynamic>;
-      final int temp = (cur['temperature_2m'] as num).round();
-      final int code = (cur['weather_code'] as num).toInt();
+
+      final location =
+          jsonDecode(locationResponse.body) as Map<String, dynamic>;
+
+      final latitude = (location['latitude'] as num).toDouble();
+      final longitude = (location['longitude'] as num).toDouble();
+
+      final weatherResponse = await http
+          .get(
+            Uri.parse(
+              'https://api.open-meteo.com/v1/forecast'
+              '?latitude=$latitude'
+              '&longitude=$longitude'
+              '&current=temperature_2m,weather_code',
+            ),
+          )
+          .timeout(const Duration(seconds: 10));
+
+      final data = jsonDecode(weatherResponse.body) as Map<String, dynamic>;
+      final current = data['current'] as Map<String, dynamic>;
+
+      final temp = (current['temperature_2m'] as num).round();
+      final code = (current['weather_code'] as num).toInt();
+
       if (!mounted) return;
+
       setState(() {
         _weatherValue = '$temp°';
         _weatherNote = _weatherText(code);
@@ -98,6 +149,7 @@ class _HomeScreenState extends State<HomeScreen> {
       });
     } catch (_) {
       if (!mounted) return;
+
       setState(() {
         _weatherValue = '–°';
         _weatherNote = 'Could not load';
@@ -106,8 +158,8 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  String _moodLabel(BoyMood m) {
-    switch (m) {
+  String _moodLabel(BoyMood mood) {
+    switch (mood) {
       case BoyMood.listening:
         return 'Listening';
       case BoyMood.thinking:
@@ -123,16 +175,20 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  String _statusLine(AssistantBrain b) {
-    if (b.sleeping) return 'Zzz… tap me to wake me up';
-    if (b.thinking) return 'Thinking…';
-    if (b.speaking) return 'Talking…';
-    if (b.active) return 'Listening…';
-    if (b.background) return 'Ready, say "Hey Penta"';
+  String _statusLine(AssistantBrain brain) {
+    if (brain.sleeping) return 'Zzz… tap me to wake me up';
+    if (brain.thinking) return 'Thinking…';
+    if (brain.speaking) return 'Talking…';
+    if (brain.active) return 'Listening…';
+    if (brain.background) return 'Ready, say "Hey Penta"';
     return 'Ready when you are';
   }
 
-  Widget _chip(IconData icon, String label, VoidCallback onTap) {
+  Widget _chip(
+    IconData icon,
+    String label,
+    VoidCallback onTap,
+  ) {
     return Expanded(
       child: GestureDetector(
         onTap: onTap,
@@ -149,7 +205,10 @@ class _HomeScreenState extends State<HomeScreen> {
             children: [
               Icon(icon, size: 20, color: neonCyan),
               const SizedBox(height: 4),
-              Text(label, style: const TextStyle(fontSize: 11)),
+              Text(
+                label,
+                style: const TextStyle(fontSize: 11),
+              ),
             ],
           ),
         ),
@@ -157,7 +216,12 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _card(String title, Widget value, String note, {VoidCallback? onTap}) {
+  Widget _card(
+    String title,
+    Widget value,
+    String note, {
+    VoidCallback? onTap,
+  }) {
     return Expanded(
       child: GestureDetector(
         onTap: onTap,
@@ -174,9 +238,24 @@ class _HomeScreenState extends State<HomeScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(title, style: const TextStyle(fontSize: 10, letterSpacing: 1, color: Colors.white54)),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 10,
+                  letterSpacing: 1,
+                  color: Colors.white54,
+                ),
+              ),
               value,
-              Text(note, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, color: Colors.white54)),
+              Text(
+                note,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: Colors.white54,
+                ),
+              ),
             ],
           ),
         ),
@@ -186,18 +265,23 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final AssistantBrain brain = widget.brain;
+    final brain = widget.brain;
+
     return ListenableBuilder(
       listenable: brain,
-      builder: (BuildContext context, Widget? child) {
-        final BoyMood mood = brain.mood;
-        final DateTime now = DateTime.now();
+      builder: (context, child) {
+        final mood = brain.mood;
+        final now = DateTime.now();
+
         return Container(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: [Color(0xFF0A1030), Color(0xFF05060F)],
+              colors: [
+                Color(0xFF0A1030),
+                Color(0xFF05060F),
+              ],
             ),
           ),
           child: SafeArea(
@@ -215,7 +299,10 @@ class _HomeScreenState extends State<HomeScreen> {
                               '${_greeting()}, ${brain.callName} 😎',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w700),
+                              style: const TextStyle(
+                                fontSize: 21,
+                                fontWeight: FontWeight.w700,
+                              ),
                             ),
                             const SizedBox(height: 4),
                             Row(
@@ -225,7 +312,9 @@ class _HomeScreenState extends State<HomeScreen> {
                                   height: 7,
                                   decoration: BoxDecoration(
                                     shape: BoxShape.circle,
-                                    color: brain.active ? const Color(0xFF22C55E) : neonCyan,
+                                    color: brain.active
+                                        ? const Color(0xFF22C55E)
+                                        : neonCyan,
                                   ),
                                 ),
                                 const SizedBox(width: 6),
@@ -233,7 +322,10 @@ class _HomeScreenState extends State<HomeScreen> {
                                   child: Text(
                                     _statusLine(brain),
                                     overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(fontSize: 12, color: Colors.white54),
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.white54,
+                                    ),
                                   ),
                                 ),
                               ],
@@ -244,21 +336,33 @@ class _HomeScreenState extends State<HomeScreen> {
                       IconButton(
                         tooltip: 'Apps',
                         onPressed: () => widget.onOpenTab(1),
-                        icon: const Icon(Icons.apps, color: Colors.white70),
+                        icon: const Icon(
+                          Icons.apps,
+                          color: Colors.white70,
+                        ),
                       ),
                       IconButton(
                         tooltip: 'Camera assistant',
                         onPressed: () {
                           Navigator.push(
                             context,
-                            MaterialPageRoute<void>(builder: (BuildContext c) => CameraAssistScreen(brain: brain)),
+                            MaterialPageRoute<void>(
+                              builder: (context) =>
+                                  CameraAssistScreen(brain: brain),
+                            ),
                           );
                         },
-                        icon: const Icon(Icons.center_focus_strong, color: neonCyan),
+                        icon: const Icon(
+                          Icons.center_focus_strong,
+                          color: neonCyan,
+                        ),
                       ),
                       Container(
                         margin: const EdgeInsets.only(right: 8),
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
                         decoration: BoxDecoration(
                           color: const Color(0xFF2A1B1B),
                           borderRadius: BorderRadius.circular(14),
@@ -266,9 +370,19 @@ class _HomeScreenState extends State<HomeScreen> {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(Icons.local_fire_department, size: 16, color: Color(0xFFFF8A3D)),
+                            const Icon(
+                              Icons.local_fire_department,
+                              size: 16,
+                              color: Color(0xFFFF8A3D),
+                            ),
                             const SizedBox(width: 3),
-                            Text('$_streak', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                            Text(
+                              '$_streak',
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -281,25 +395,39 @@ class _HomeScreenState extends State<HomeScreen> {
                     padding: const EdgeInsets.fromLTRB(14, 6, 14, 6),
                     child: Stack(
                       children: [
-                        const Positioned.fill(
-                          child: LiveAvatar(),
+                        Positioned.fill(
+                          child: Center(
+                            child: WavingAvatarVideo(brain: brain),
+                          ),
                         ),
                         Positioned(
                           left: 12,
                           top: 12,
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 5,
+                            ),
                             decoration: BoxDecoration(
                               color: const Color(0xCC2A1B4D),
                               borderRadius: BorderRadius.circular(14),
-                              border: Border.all(color: neonViolet.withAlpha(120)),
+                              border: Border.all(
+                                color: neonViolet.withAlpha(120),
+                              ),
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Icon(Icons.auto_awesome, size: 13, color: Color(0xFFF472B6)),
+                                const Icon(
+                                  Icons.auto_awesome,
+                                  size: 13,
+                                  color: Color(0xFFF472B6),
+                                ),
                                 const SizedBox(width: 5),
-                                Text(_moodLabel(mood), style: const TextStyle(fontSize: 12)),
+                                Text(
+                                  _moodLabel(mood),
+                                  style: const TextStyle(fontSize: 12),
+                                ),
                               ],
                             ),
                           ),
@@ -310,18 +438,33 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
 
                 if (brain.lastEvent.contains('error'))
-                  Text(brain.lastEvent, style: const TextStyle(fontSize: 10, color: Colors.white38)),
+                  Text(
+                    brain.lastEvent,
+                    style: const TextStyle(
+                      fontSize: 10,
+                      color: Colors.white38,
+                    ),
+                  ),
 
                 Padding(
                   padding: const EdgeInsets.fromLTRB(10, 2, 10, 8),
                   child: Row(
                     children: [
-                      _chip(Icons.music_note, 'Music', () => brain.runCommand('play relaxing music', spoken: true)),
+                      _chip(
+                        Icons.music_note,
+                        'Music',
+                        () => brain.runCommand(
+                          'play relaxing music',
+                          spoken: true,
+                        ),
+                      ),
                       _chip(
                         Icons.menu_book,
                         'Study',
                         () => brain.runCommand(
-                          'Help me study. Ask me which subject I want to study today and then quiz me like a friendly tutor.',
+                          'Help me study. Ask me which subject '
+                          'I want to study today and then quiz me '
+                          'like a friendly tutor.',
                           spoken: true,
                         ),
                       ),
@@ -329,22 +472,38 @@ class _HomeScreenState extends State<HomeScreen> {
                         Icons.favorite_border,
                         'Vent',
                         () => brain.runCommand(
-                          'I want to talk about my day and how I feel. Please listen like a caring friend and ask me what happened.',
+                          'I want to talk about my day and how I feel. '
+                          'Please listen like a caring friend and ask '
+                          'me what happened.',
                           spoken: true,
                         ),
                       ),
-                      _chip(Icons.photo_camera, 'Photo', () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute<void>(builder: (BuildContext c) => CameraAssistScreen(brain: brain)),
-                        );
-                      }),
-                      _chip(Icons.auto_fix_high, 'Edit', () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute<void>(builder: (BuildContext c) => PhotoEditorScreen(brain: brain)),
-                        );
-                      }),
+                      _chip(
+                        Icons.photo_camera,
+                        'Photo',
+                        () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute<void>(
+                              builder: (context) =>
+                                  CameraAssistScreen(brain: brain),
+                            ),
+                          );
+                        },
+                      ),
+                      _chip(
+                        Icons.auto_fix_high,
+                        'Edit',
+                        () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute<void>(
+                              builder: (context) =>
+                                  PhotoEditorScreen(brain: brain),
+                            ),
+                          );
+                        },
+                      ),
                     ],
                   ),
                 ),
@@ -355,18 +514,35 @@ class _HomeScreenState extends State<HomeScreen> {
                     children: [
                       _card(
                         'WEATHER',
-                        Text(_weatherValue, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
+                        Text(
+                          _weatherValue,
+                          style: const TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
                         _weatherNote,
                         onTap: _loadWeather,
                       ),
                       _card(
                         'TODAY',
-                        Text('${now.day}', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
-                        '${_months[now.month - 1]} ${_days[now.weekday - 1]}',
+                        Text(
+                          '${now.day}',
+                          style: const TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        '${_months[now.month - 1]} '
+                        '${_days[now.weekday - 1]}',
                       ),
                       _card(
                         'MOOD',
-                        const Icon(Icons.favorite, color: Color(0xFFF472B6), size: 24),
+                        const Icon(
+                          Icons.favorite,
+                          color: Color(0xFFF472B6),
+                          size: 24,
+                        ),
                         _moodLabel(mood),
                       ),
                     ],
